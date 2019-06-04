@@ -112,27 +112,44 @@ class msfx_window(tk.Tk):
         self.wave_freq_scroll = []
         i = 0
         while i < 3:
-            
+            if i == 0:
+                ltr = 'A'
+            elif i == 1:
+                ltr = 'B'
+            else:
+                ltr = 'C'
+            l = tk.Label(self, text='Channel {} freq:'.format(ltr))
+            l.grid(row=i*2, columnspan=3)
+            self.wave_vals.append(tk.StringVar())
+            self.wave_freq_entries.append(tk.Entry(self, width=4, textvariable=self.wave_vals[i]))
+            wv = self.wave_vals[i]
+            wv.trace('w', lambda name, index, mode, wv=wv: self.changefreq)
+            self.wave_freq_entries[i].grid(row=i*2, column=4)
+            self.wave_freq_scroll.append(tk.Scale(self, orient=tk.HORIZONTAL, to=4095, resolution=1)) #command=lambda a:self.changefreq(self.wave_freq_scroll[i].get(), self.wave_freq_scroll[i])))
+            self.wave_freq_scroll[i].grid(row=(i*2)+1, column=1, columnspan=5, sticky='EW')
+            i += 1
+        self.wave_freq_scroll[0].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[0].get(), 0))
+        #tk.Button(self, text='<', command=lambda:self.freq_inc(-1)).grid(row=(i*2)+1, column=0)
+        #tk.Button(self, text='>', command=lambda:self.freq_inc(1)).grid(row=(i*2)+1, column=6)
+        #self.wave_one_freq_txt = tk.Label(self, text='Channel A freq:')
+        #self.wave_one_freq_txt.grid(row=0, columnspan=3)
+        #waveoneval = tk.StringVar()
+        #self.wave_one_freq_entry = tk.Entry(self, width=4, textvariable=waveoneval)
+        #waveoneval.trace("w", lambda name, index, mode, waveoneval=waveoneval: self.changefreq(waveoneval))
+        #self.wave_one_freq_entry.grid(row=0, column=4)
+        #self.wave_one_down = tk.Button(self, text='<', command=lambda:self.freq_inc(1,-1))
+        #self.wave_one_down.grid(row=1, column=0)
+        #self.wave_one_up = tk.Button(self, text='>', command=lambda:self.freq_inc(1, 1))
+        #self.wave_one_up.grid(row=1, column=6)
+        #self.wave_one_freq_sb = tk.Scale(self, orient=tk.HORIZONTAL, to=4095, resolution=1, command=self.changefreq)
+        #self.wave_one_freq_sb.grid(row=1, column=1, columnspan=5, sticky='EW')
 
-        self.wave_one_freq_txt = tk.Label(self, text='Channel A freq:')
-        self.wave_one_freq_txt.grid(row=0, columnspan=3)
-        waveoneval = tk.StringVar()
-        self.wave_one_freq_entry = tk.Entry(self, width=4, textvariable=waveoneval)
-        waveoneval.trace("w", lambda name, index, mode, waveoneval=waveoneval: self.changefreq(waveoneval))
-        self.wave_one_freq_entry.grid(row=0, column=4)
-        self.wave_one_down = tk.Button(self, text='<', command=lambda:self.freq_inc(1,-1))
-        self.wave_one_down.grid(row=1, column=0)
-        self.wave_one_up = tk.Button(self, text='>', command=lambda:self.freq_inc(1, 1))
-        self.wave_one_up.grid(row=1, column=6)
-        self.wave_one_freq_sb = tk.Scale(self, orient=tk.HORIZONTAL, to=4095, resolution=1, command=self.changefreq)
-        self.wave_one_freq_sb.grid(row=1, column=1, columnspan=5, sticky='EW')
+
+    def freq_inc(self, delta):
+        self.wave_freq_scroll[0].set(self.wave_freq_scroll[0].get()+delta)
 
 
-    def freq_inc(self, wavenum, delta):
-        if wavenum == 1:
-            self.wave_one_freq_sb.set(self.wave_one_freq_sb.get()+delta)
-
-    def changefreq(self, o):
+    def changefreq(self, o, num):
         if type(o) == tk.StringVar:
             if o.get() == '':
                 return
@@ -141,13 +158,13 @@ class msfx_window(tk.Tk):
             c = int(o.get())
             if c > 4095:
                 c = 4095
-                self.wave_one_freq_entry.delete(0,tk.END)
-                self.wave_one_freq_entry.insert(0,c)
+                self.wave_freq_entries[0].delete(0,tk.END)
+                self.wave_freq_entries[0].insert(0,c)
             self.wave_one_freq_sb.set(c)
         else:
-            self.wave_one_freq_entry.delete(0,tk.END)
-            c = self.wave_one_freq_sb.get()
-            self.wave_one_freq_entry.insert(0,c)
+            self.wave_freq_entries[0].delete(0,tk.END)#one_freq_entry.delete(0,tk.END)
+            c = self.wave_freq_scroll[0].get()#one_freq_sb.get()
+            self.wave_freq_entries[0].insert(0,c)#freq_entry.insert(0,c)
             
 
 
