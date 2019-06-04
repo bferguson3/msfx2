@@ -1,0 +1,70 @@
+fname "sfxtest.bin"
+
+binheader:
+    db $fe
+    dw init
+    dw EOF
+    dw init 
+
+WRTPSG:     equ $0093
+RDPSG:      equ $0096
+EXEBAS:     equ $4646
+BDRCLR:     equ $F3EB
+
+org $8020
+init:
+     ; sets rough tune of sqwv 1 to 508 (=440)
+    xor a
+    ld e, $ff
+    call WRTPSG 
+    ld a, 1
+    ld e, $00 
+    call WRTPSG
+     ; sets volume of sqwv 1 to 16/16
+    ld a, 8 
+    ld e, %00001111
+    call WRTPSG 
+
+    ;; print all registers 0-d
+    ld d, 0
+    xor a 
+.printloop:
+    call RDPSG
+    call basic_printb_A
+    inc d 
+    ld a, d
+    cp 14
+    jr z, .endprintloop
+    jr .printloop
+.endprintloop:    
+  ret
+
+basic_printb_A:
+;; If in basic, will print the binary output of register A.
+;; clobbers A, B, C
+    ld c, 8 
+.printloop:
+    sla a 
+    jr c, .print1
+    ld b, a 
+    ld a, $30 ;ascii 0
+    call $a2 
+    ld a, b 
+    dec c 
+    jr nz, .printloop 
+  jr .endprint
+.print1:
+    ld b, a 
+    ld a, $31 ; ascii 1
+    call $a2
+    ld a, b 
+    dec c 
+    jr nz, .printloop
+.endprint:
+    ld a, $0d 
+    call $a2 
+    ld a, $0a 
+    call $a2 
+  ret
+
+EOF:

@@ -1,1 +1,9 @@
 *.wav
+/.vscode
+*.bas
+*.sh
+*.bin
+*.exe
+*.out
+*.sym
+*.tmp

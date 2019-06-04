@@ -11,6 +11,7 @@ import math
 from scipy import signal as sg 
 import tkinter as tk 
 
+'''specific waveform type to msx'''
 class msxwaveform(object):
     def __init__(self, samplerate=22050, hex_freq=(0*256)+255, length=1, envelope = False, envelopetype='0b0000', env_period = (0*256)+11):
         self.samplerate = samplerate 
@@ -31,6 +32,7 @@ class msxwaveform(object):
         self.x = np.arange(self.samples)
         self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
         self.y = (self.volume/2) * self.y + (self.volume/2)
+####
 
 # sine:
 #y = envelope_level * np.sin(2 * np.pi * freq * x / sampling_rate)
@@ -43,6 +45,7 @@ class msxwaveform(object):
 #y = envelope_level * sg.sawtooth(2 * np.pi * freq*2 * x / sampling_rate, 0.5)
 # adjust for volume/unsigned pcm
 
+'''converts any integer up to 4 bytes long to byte form of either endian type'''
 def ToByteArr(num, len, endian=1):
     # num is number to convert
     # len is how many bytes to return in the array
@@ -83,10 +86,10 @@ def ToByteArr(num, len, endian=1):
         ret_arr.append(b2)
         ret_arr.append(b1)
     return ret_arr
+####
 
-
-# now write wav header
-def writeheader(file):
+'''writes header to passed msxwaveform and file'''
+def writeheader(wavetest, file):
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
     file.write(bytes(ToByteArr(36+wavetest.samples, 4, endian=0)))# [0x68, 0xac, 0x00, 0x00])) # 36 + data size (lend) 22050 or $68 $ac for 44100
     file.write(bytes([0x57, 0x41, 0x56, 0x45])) # WAVE)
@@ -101,7 +104,7 @@ def writeheader(file):
     file.write(bytes([0x64, 0x61, 0x74, 0x61])) # 'data'
     file.write(bytes(ToByteArr(wavetest.samples, 4, endian=0))) # data block size (22050b)
 
-
+'''actual app class'''
 class msfx_window(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -110,6 +113,8 @@ class msfx_window(tk.Tk):
         self.wave_vals = []
         self.wave_freq_entries = []
         self.wave_freq_scroll = []
+        self.enabled = []
+        self.noise = []
         i = 0
         while i < 3:
             if i == 0:
@@ -127,55 +132,74 @@ class msfx_window(tk.Tk):
             self.wave_freq_entries[i].grid(row=i*2, column=4)
             self.wave_freq_scroll.append(tk.Scale(self, orient=tk.HORIZONTAL, to=4095, resolution=1)) #command=lambda a:self.changefreq(self.wave_freq_scroll[i].get(), self.wave_freq_scroll[i])))
             self.wave_freq_scroll[i].grid(row=(i*2)+1, column=1, columnspan=5, sticky='EW')
+            tk.Label(self, text='Enabled?').grid(row=i*2, column=7)
+            tk.Label(self, text='Music/Noise/Mix?').grid(row=i*2, column=8, columnspan=3)
+            self.enabled.append(tk.BooleanVar())
+            tk.Checkbutton(self, variable=self.enabled[i]).grid(row=(i*2)+1, column=7)
+            self.noise.append(tk.IntVar())
+            tk.Radiobutton(self, variable=self.noise[i], value = 0).grid(row=(i*2)+1, column=8)
+            tk.Radiobutton(self, variable=self.noise[i], value=1).grid(row=(i*2)+1, column=9)
+            tk.Radiobutton(self, variable=self.noise[i], value=2).grid(row=(i*2)+1, column=10)
             i += 1
+
         self.wave_freq_scroll[0].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[0].get(), 0))
-        #tk.Button(self, text='<', command=lambda:self.freq_inc(-1)).grid(row=(i*2)+1, column=0)
-        #tk.Button(self, text='>', command=lambda:self.freq_inc(1)).grid(row=(i*2)+1, column=6)
-        #self.wave_one_freq_txt = tk.Label(self, text='Channel A freq:')
-        #self.wave_one_freq_txt.grid(row=0, columnspan=3)
-        #waveoneval = tk.StringVar()
-        #self.wave_one_freq_entry = tk.Entry(self, width=4, textvariable=waveoneval)
-        #waveoneval.trace("w", lambda name, index, mode, waveoneval=waveoneval: self.changefreq(waveoneval))
-        #self.wave_one_freq_entry.grid(row=0, column=4)
-        #self.wave_one_down = tk.Button(self, text='<', command=lambda:self.freq_inc(1,-1))
-        #self.wave_one_down.grid(row=1, column=0)
-        #self.wave_one_up = tk.Button(self, text='>', command=lambda:self.freq_inc(1, 1))
-        #self.wave_one_up.grid(row=1, column=6)
-        #self.wave_one_freq_sb = tk.Scale(self, orient=tk.HORIZONTAL, to=4095, resolution=1, command=self.changefreq)
-        #self.wave_one_freq_sb.grid(row=1, column=1, columnspan=5, sticky='EW')
+        self.wave_freq_scroll[1].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[1].get(), 1))
+        self.wave_freq_scroll[2].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[2].get(), 2))
+        w = self.wave_vals[0]
+        self.wave_vals[0].trace("w", lambda name, index, mode, w=w: self.changefreq(w.get(), 0, True))
+        w = self.wave_vals[1]
+        self.wave_vals[1].trace("w", lambda name, index, mode, w=w: self.changefreq(w.get(), 1, True))
+        w = self.wave_vals[2]
+        self.wave_vals[2].trace("w", lambda name, index, mode, w=w: self.changefreq(w.get(), 2, True))
+        
+        tk.Button(self, text='<', command=lambda:self.freq_inc(0, -1)).grid(row=1, column=0)
+        tk.Button(self, text='>', command=lambda:self.freq_inc(0, 1)).grid(row=1, column=6)
+        tk.Button(self, text='<', command=lambda:self.freq_inc(1, -1)).grid(row=3, column=0)
+        tk.Button(self, text='>', command=lambda:self.freq_inc(1, 1)).grid(row=3, column=6)
+        tk.Button(self, text='<', command=lambda:self.freq_inc(2, -1)).grid(row=5, column=0)
+        tk.Button(self, text='>', command=lambda:self.freq_inc(2, 1)).grid(row=5, column=6)
 
+        tk.Button(self, text='Save .WAV', command=self.makefile).grid(row=6, column=3, columnspan=6)
 
-    def freq_inc(self, delta):
-        self.wave_freq_scroll[0].set(self.wave_freq_scroll[0].get()+delta)
+    def freq_inc(self, wav, delta):
+        self.wave_freq_scroll[wav].set(self.wave_freq_scroll[wav].get()+delta)
 
-
-    def changefreq(self, o, num):
-        if type(o) == tk.StringVar:
-            if o.get() == '':
+    def changefreq(self, o, num, manual=False):
+        if manual == False:
+            self.wave_freq_entries[num].delete(0,tk.END)
+            c = self.wave_freq_scroll[num].get()
+            self.wave_freq_entries[num].insert(0,c)
+        else:
+            c = self.wave_freq_entries[num].get()
+            if c == '':
                 return
-            if len(o.get()) > 4:
-                o.set(o.get()[:4])
-            c = int(o.get())
+            if type(c) == str:
+                if len(c) > 4:
+                    c = c[:4]
+                c = int(c)
             if c > 4095:
                 c = 4095
-                self.wave_freq_entries[0].delete(0,tk.END)
-                self.wave_freq_entries[0].insert(0,c)
-            self.wave_one_freq_sb.set(c)
-        else:
-            self.wave_freq_entries[0].delete(0,tk.END)#one_freq_entry.delete(0,tk.END)
-            c = self.wave_freq_scroll[0].get()#one_freq_sb.get()
-            self.wave_freq_entries[0].insert(0,c)#freq_entry.insert(0,c)
-            
+            self.wave_freq_entries[num].delete(0,tk.END)
+            self.wave_freq_entries[num].insert(0,c)
+            self.wave_freq_scroll[num].set(c)
 
+    def makefile(self):
+        fre = int(self.wave_freq_entries[0].get())
+        w = msxwaveform(hex_freq = fre)
+        try:
+            f = open('test2.wav', 'wb')
+            writeheader(w, f)
+            for i in w.y:
+                i = int(i)
+                f.write(bytes([i]))
+            print('.wav written successfully!')
+        except:
+            print('something went wrong.')
+        finally:
+            if(f):
+                f.close()
+#### end def for msfx_window
 
-wavetest = msxwaveform(hex_freq=(1*256)+255, length=2)
-
-f = open('test2.wav', 'wb')
-writeheader(f)
-for i in wavetest.y:
-    i = int(i)
-    f.write(bytes([i]))
-f.close()
 
 app = msfx_window()
 app.mainloop()
