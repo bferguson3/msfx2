@@ -52,7 +52,6 @@ class msxwaveform(object):
         self.x = np.arange(self.samples)
 
         self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-
         self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
 
         if self.envelope == True:
@@ -197,19 +196,6 @@ def apply_envelope(msxwav):
             j += 1
             if j >= len(y):
                 j = 0
-
-#apply_envelope(msxwaveform(envelopetype=envelope_types['inv_sawtooth'], length=1, env_period=6992))
-
-# sine:
-#y = envelope_level * np.sin(2 * np.pi * freq * x / sampling_rate)
-# square wav: default duty = 0.5
-#y = sg.square(2 * np.pi * freq_tp * x / sampling_rate)
-# sqaure w duty cycle:
-#wf 00xx and 1001
-#y = envelope_level * sg.sawtooth(2 * np.pi * freq * x / sampling_rate, 0)
-# triangle 1110: ??
-#y = envelope_level * sg.sawtooth(2 * np.pi * freq*2 * x / sampling_rate, 0.5)
-# adjust for volume/unsigned pcm
 
 
 '''actual app class'''
