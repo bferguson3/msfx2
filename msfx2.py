@@ -20,7 +20,8 @@ class msxwaveform(object):
         self.length = length
         self.envelope = envelope
         self.envelopetype = envelopetype
-        self.env_period = env_period
+        self.env_period = env_period    # 6992 or 1b50h is ~1s
+        self.env_bin = ''
 
         if env_period >= (256*256):
             self.env_period = 65535
@@ -33,7 +34,7 @@ class msxwaveform(object):
 
         self.volume = 255   # max value of simulated envelope
 
-        self.env_freq = (3580000/2) / (256*self.env_period)
+        self.env_freq = (3580000/2) / (256*self.env_period) 
 
         self.x = np.arange(self.samples)
 
@@ -42,16 +43,6 @@ class msxwaveform(object):
         self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
 ####
 
-# sine:
-#y = envelope_level * np.sin(2 * np.pi * freq * x / sampling_rate)
-# square wav: default duty = 0.5
-#y = sg.square(2 * np.pi * freq_tp * x / sampling_rate)
-# sqaure w duty cycle:
-#wf 00xx and 1001
-#y = envelope_level * sg.sawtooth(2 * np.pi * freq * x / sampling_rate, 0)
-# triangle 1110: ??
-#y = envelope_level * sg.sawtooth(2 * np.pi * freq*2 * x / sampling_rate, 0.5)
-# adjust for volume/unsigned pcm
 
 '''converts any integer up to 4 bytes long to byte form of either endian type'''
 def ToByteArr(num, len, endian=1):
@@ -117,6 +108,98 @@ def writeheader(wavetest, file):
 
     file.write(bytes([0x64, 0x61, 0x74, 0x61])) # 'data'
     file.write(bytes(ToByteArr(wavetest.samples, 4, endian=0))) # data block size (22050b)
+#
+
+envelope_types = {
+    #('decline', '0b0000', max(0,-x)),
+    #('incline_off', '0b0100', min(1,x)), #then set to 0 after 1 loop
+    'inv_sawtooth': '0b1000',#, sg.sawtooth(2 * np.pi * freq * x / sampling_rate, 0)),
+    'decline': '0b1001',#, max(0,-x)),
+    'inv_triangle': '0b1010',#, sg.sawtooth(1 * np.pi * freq * x / sampling_rate, 0.5)), #offset by half a second?
+    'decline_on': '0b1011',#, max(0,-x)), #then set to 1
+    'sawtooth': '0b1100',#, sg.sawtooth(2 * np.pi * freq * x / sampling_rate, 1)),
+    'incline': '0b1101',#, min(1,x)),
+    'triangle': '0b1110',# sg.sawtooth(1 * np.pi * freq * x / sampling_rate, 0.5)),
+    'incline_off': '0b1111'#, min(1,x)), #then set to 0
+}
+
+def apply_envelope(msxwav):
+    #TODO this currently assumes env_period of 6992
+    env_len = 1 # 6992
+    x = np.arange((32*env_len)*msxwav.length) #32 per second
+    global envelope_types
+    # denominator is num of samples, therefore resolution of envelope
+    if msxwav.envelopetype == envelope_types['inv_sawtooth']:
+        y = (sg.sawtooth(2 * np.pi * env_len * x / 32, 0) + 1)/2
+    elif msxwav.envelopetype == envelope_types['decline']:
+        y = (sg.sawtooth(2 * np.pi * env_len * x / 32, 0) + 1)/2
+        if len(y) > 32:
+            i = 32
+            while i < len(y):
+                y[i] = 0
+                i += 1
+    elif msxwav.envelopetype == envelope_types['inv_triangle']:
+        y = (sg.sawtooth( ((1 * np.pi * env_len * x) / 32) + np.pi, 0.5) + 1)/2 #offset by half a second?
+    elif msxwav.envelopetype == envelope_types['decline_on']:
+        y = (sg.sawtooth(2 * np.pi * env_len * x / 32, 0) + 1)/2
+        if len(y) > 32:
+            i = 32
+            while i < len(y):
+                y[i] = 1
+                i += 1
+    elif msxwav.envelopetype == envelope_types['sawtooth']:
+        y = (sg.sawtooth(2 * np.pi * env_len * x / 32, 1) + 1)/2
+    elif msxwav.envelopetype == envelope_types['incline']:
+        y = (sg.sawtooth(2 * np.pi * env_len * x / 32, 1) + 1)/2
+        if len(y) > 32:
+            i = 32
+            while i < len(y):
+                y[i] = 1
+                i += 1
+    elif msxwav.envelopetype == envelope_types['triangle']:
+        y = (sg.sawtooth( ((1 * np.pi * env_len * x) / 32), 0.5) + 1)/2
+    elif msxwav.envelopetype == envelope_types['incline_off']:
+        y = (sg.sawtooth(2 * np.pi * env_len * x / 32, 1) + 1)/2
+        if len(y) > 32:
+            i = 32
+            while i < len(y):
+                y[i] = 0
+                i += 1
+    # end envelope pattern definitions
+
+    i = 0
+    j = 0
+    perstep = math.floor(msxwav.samplerate / (32)) 
+    for c in msxwav.y:
+        c = c * y[j]
+        #print(c)
+        msxwav.y[i] = int(c)
+        i += 1
+        if i % perstep == 0:
+            j += 1
+            if j >= len(y):
+                j = len(y)-1
+    # test
+    f = open('test3.wav', 'wb')
+    writeheader(msxwav, f)
+    for i in msxwav.y:
+        i = int(i)
+        f.write(bytes([i]))
+    f.close()
+
+        
+
+apply_envelope(msxwaveform(envelopetype=envelope_types['decline_on'], length=2))
+# sine:
+#y = envelope_level * np.sin(2 * np.pi * freq * x / sampling_rate)
+# square wav: default duty = 0.5
+#y = sg.square(2 * np.pi * freq_tp * x / sampling_rate)
+# sqaure w duty cycle:
+#wf 00xx and 1001
+#y = envelope_level * sg.sawtooth(2 * np.pi * freq * x / sampling_rate, 0)
+# triangle 1110: ??
+#y = envelope_level * sg.sawtooth(2 * np.pi * freq*2 * x / sampling_rate, 0.5)
+# adjust for volume/unsigned pcm
 
 
 '''actual app class'''
@@ -142,7 +225,8 @@ class msfx_window(tk.Tk):
                 ltr = 'C'
             l = tk.Label(self, text='Channel {} freq:'.format(ltr))
             l.grid(row=i*2, columnspan=3)
-            
+            tk.Label(self, text=' 0150h').grid(row=i*2, column=5)
+
             self.wave_vals.append(tk.StringVar())
             wv = self.wave_vals[i]
             wv.trace('w', lambda name, index, mode, wv=wv: self.changefreq)
