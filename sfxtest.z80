@@ -13,7 +13,13 @@ BDRCLR:     equ $F3EB
 
 org $8020
 init:
-     ; sets rough tune of sqwv 1 to 508 (=440)
+     ; sets rough tune of sqwv 1 to 254 (=440)
+    ld a, $0d
+    ld e, %00000100 ; \| \| <invert sawtooth 
+    call WRTPSG 
+    ld a, $0c 
+    ld e, $1b       ; < frequency of 16*256
+    call WRTPSG 
     xor a
     ld e, $ff
     call WRTPSG 
@@ -22,8 +28,9 @@ init:
     call WRTPSG
      ; sets volume of sqwv 1 to 16/16
     ld a, 8 
-    ld e, %00001111
+    ld e, %00011111
     call WRTPSG 
+
 
     ;; print all registers 0-d
     ld d, 0
