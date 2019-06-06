@@ -16,6 +16,32 @@ import time
 from threading import Thread
 from tkinter import messagebox
 
+class icon_datas(object):
+    def __init__(self):
+    ## button bitmaps
+        self.decline_off_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03, 0x00, 0x06, 0x00, 0x0c, 0x00, 0x18, 0x00, 0xf0, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+        self.incline_off_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x00, 0xe0, 0x00, 0xb0, 0x00, 0x98, 0x00, 0x8c, 0x00, 0x86, 0x00, 0x83, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+        self.inv_sawtooth_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x0c, 0xe6, 0x1c, 0xac, 0x35, 0x38, 0x67, 0x30, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+
+
 envelope_types = {
     #('decline', '0b0000', max(0,-x)),
     #('incline_off', '0b0100', min(1,x)), #then set to 0 after 1 loop
@@ -383,8 +409,17 @@ class msfx_window(tk.Tk):
             tk.Radiobutton(self, variable=self.noise[i], value=1).grid(row=(i*3)+2, column=9)
             tk.Radiobutton(self, variable=self.noise[i], value=2).grid(row=(i*3)+2, column=10)
             
-            i += 1
+            #env_buttons_a=[]
+            #env_buttons_b=[]
+            #env_buttons_c=[]
+            #k = 0
+            #while k < 1:
+            #    env_buttons_a.append(tk.Button(self, image=decline_off_icon, width=20, height=15))
+            #    env_buttons_a[k].grid(row=12)
+            #    k += 1
 
+            i += 1
+        
         self.wave_freq_scroll[0].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[0].get(), 0))
         self.wave_freq_scroll[1].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[1].get(), 1))
         self.wave_freq_scroll[2].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[2].get(), 2))
@@ -452,7 +487,7 @@ class msfx_window(tk.Tk):
             
 
 
-    def makefile_thread(self):
+    def makefile(self):
         w = []
 
         s = 0
@@ -505,9 +540,9 @@ class msfx_window(tk.Tk):
                 f.close()
 
 
-    def makefile(self):
-        t = Thread(target=self.makefile_thread, daemon=True)
-        t.start()
+    #def makefile(self):
+        #t = Thread(target=self.makefile_thread, daemon=True)
+        #t.start()
 
     def playthread(self):
         t = Thread(target=self.playfile, daemon=True)
@@ -549,7 +584,7 @@ class audio_player(object):
                             rate=self.wf.getframerate(),
                             output=True,
                             stream_callback=self.play_cb)
-        wd = self.wf.readframes(1024)
+        #wd = self.wf.readframes(1024)
         stream.start_stream()
         while stream.is_active():
             time.sleep(0.1)
@@ -565,6 +600,10 @@ class audio_player(object):
         data = self.wf.readframes(frame_count)
         return (data, pyaudio.paContinue)
  
-
 app = msfx_window() 
+icons = icon_datas()
+inv_sawtooth_icon = tk.BitmapImage(data=icons.inv_sawtooth_data)
+decline_off_icon = tk.BitmapImage(data=icons.decline_off_data)
+incline_off_icon = tk.BitmapImage(data=icons.incline_off_data)
+tk.Button(app, image=inv_sawtooth_icon, width=16, height=16).grid(row=12)
 app.mainloop()
