@@ -196,17 +196,18 @@ class msxwaveform(object):
 
         self.samples = self.length * self.samplerate
 
-        self.volume = 255   # max value of simulated envelope
+        self.volume = 127   # max value of simulated envelope
 
         self.env_freq = (3580000/2) / (256*self.env_period) 
 
         self.x = np.arange(self.samples)
 
         self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-        self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
+        #self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
+        self.y = self.volume * self.y 
 
-        if self.envelope == True:
-            apply_envelope(self)
+        #if self.envelope == True:
+        #    apply_envelope(self)
 ####
 
 
@@ -268,7 +269,7 @@ def writeheader(wavetest, file):
     # Q R S T U V W X
     #  52535455565758
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
-    file.write(bytes(ToByteArr(36+(wavetest.samples*s*2), 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
+    file.write(bytes(ToByteArr(36+(wavetest.samples*s), 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
     file.write(bytes([0x57, 0x41, 0x56, 0x45])) # WAVE)
 
     file.write(bytes([0x66, 0x6d, 0x74, 0x20])) # 'fmt '
@@ -276,12 +277,12 @@ def writeheader(wavetest, file):
     file.write(bytes([0x01, 0x00])) # pcm (lend)
     file.write(bytes([0x01, 0x00])) # mono (lend)
     file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0)))## 22050 (lend) = $22 56, or $44 ac for 44100
-    file.write(bytes(ToByteArr(wavetest.samplerate*s*2, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
+    file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
     file.write(bytes([0x02, 0x00])) # block align - bytes for 1 sample (lend)
     file.write(bytes([0x10, 0x00])) # bits per sample (8)
 
     file.write(bytes([0x64, 0x61, 0x74, 0x61])) # 'data'
-    file.write(bytes(ToByteArr(wavetest.samples*s*2, 4, endian=0))) # data block size (22050b)
+    file.write(bytes(ToByteArr(wavetest.samples*s, 4, endian=0))) # data block size (22050b)
 #
 
 def apply_envelope(msxwav):
@@ -527,13 +528,15 @@ class msfx_window(tk.Tk):
                 
                 if self.enabled[0].get() == True:
                     b = int(w[0].y[i])
-                    f.write(bytes([0x00, b]))
+                    b += 127
+                    print(b)
+                    f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
-                    f.write(bytes([0x00,c]))
+                    f.write(bytes([c]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
-                    f.write(bytes([0x00,d]))
+                    f.write(bytes([d]))
                 i += 1
             if (f):
                 f.close()
