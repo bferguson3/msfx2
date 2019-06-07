@@ -11,8 +11,9 @@ import math
 from scipy import signal as sg 
 import tkinter as tk 
 import wave
-import pyaudio # sudo apt-get install python3-pyaudio
+#import playsound # sudo apt-get install python3-pyaudio
 import time 
+import pyaudio
 from threading import Thread
 from tkinter import messagebox
 
@@ -177,7 +178,7 @@ tone_frequencies = {
 
 '''specific waveform type to msx'''
 class msxwaveform(object):
-    def __init__(self, samplerate=11000, hex_freq=254, length=1, envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
+    def __init__(self, samplerate=22000, hex_freq=254, length=1, envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
         self.length = length
@@ -262,10 +263,12 @@ def writeheader(wavetest, file):
     for b in app.enabled:
         if b.get() == True:
             s += 1
+            print(s)
     #print(len(wavetest.y))
-
+    # Q R S T U V W X
+    #  52535455565758
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
-    file.write(bytes(ToByteArr(36+wavetest.samples*s, 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
+    file.write(bytes(ToByteArr(36+(wavetest.samples*s*2), 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
     file.write(bytes([0x57, 0x41, 0x56, 0x45])) # WAVE)
 
     file.write(bytes([0x66, 0x6d, 0x74, 0x20])) # 'fmt '
@@ -273,12 +276,12 @@ def writeheader(wavetest, file):
     file.write(bytes([0x01, 0x00])) # pcm (lend)
     file.write(bytes([0x01, 0x00])) # mono (lend)
     file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0)))## 22050 (lend) = $22 56, or $44 ac for 44100
-    file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
-    file.write(bytes([0x01, 0x00])) # block align - bytes for 1 sample (lend)
-    file.write(bytes([0x08, 0x00])) # bits per sample (8)
+    file.write(bytes(ToByteArr(wavetest.samplerate*s*2, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
+    file.write(bytes([0x02, 0x00])) # block align - bytes for 1 sample (lend)
+    file.write(bytes([0x10, 0x00])) # bits per sample (8)
 
     file.write(bytes([0x64, 0x61, 0x74, 0x61])) # 'data'
-    file.write(bytes(ToByteArr(wavetest.samples*s, 4, endian=0))) # data block size (22050b)
+    file.write(bytes(ToByteArr(wavetest.samples*s*2, 4, endian=0))) # data block size (22050b)
 #
 
 def apply_envelope(msxwav):
@@ -495,8 +498,9 @@ class msfx_window(tk.Tk):
         while i < len(self.enabled):
             w.append(0)
             if self.enabled[i].get() == True:
+                print(i, 'true')
                 fre = int(self.wave_freq_entries[i].get())
-                w[i] = msxwaveform(hex_freq = fre, envelope=True, length=2, envelopetype=envelope_types['inv_sawtooth'])
+                w[i] = msxwaveform(hex_freq = fre, envelope=True, length=1, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
@@ -510,7 +514,7 @@ class msfx_window(tk.Tk):
                 writeheader(w[0], f)
                 l = len(w[0].y)
             elif w[1] != 0:
-                print('2')
+                #print('2')
                 writeheader(w[1], f)
                 l = len(w[1].y)
             elif w[2] != 0:
@@ -518,27 +522,27 @@ class msfx_window(tk.Tk):
                 l = len(w[2].y)
 
             i = 0
-            while i < l-1:
+            while i < l:
+                # to convert to signed bytes:
+                
                 if self.enabled[0].get() == True:
                     b = int(w[0].y[i])
-                    f.write(bytes([b]))
+                    f.write(bytes([0x00, b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
-                    f.write(bytes([c]))
+                    f.write(bytes([0x00,c]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
-                    f.write(bytes([d]))
+                    f.write(bytes([0x00,d]))
                 i += 1
-            f.write(bytes([0]))
-            print('.wav written successfully!')
-            #messagebox.showinfo('Done', 'File saved')
-        except:
-            print('something went wrong.')
-
-        finally:
-            if(f):
+            if (f):
                 f.close()
-
+            print('.wav written successfully!')
+        #except:
+        #    print('something went wrong.')
+        except PermissionError:
+            print("still open!")
+        
 
     #def makefile(self):
         #t = Thread(target=self.makefile_thread, daemon=True)
@@ -549,6 +553,7 @@ class msfx_window(tk.Tk):
         t.start()
 
     def playfile(self):
+        #playsound.playsound('test2.wav', False)
         audio = pyaudio.PyAudio()
         self.wf = wave.open('test2.wav','rb')
         stream = audio.open(format=audio.get_format_from_width(self.wf.getsampwidth()),
@@ -557,13 +562,13 @@ class msfx_window(tk.Tk):
                             output=True,
                             stream_callback=self.play_cb)
         #wd = self.wf.readframes(1024)
-        stream.start_stream()
+        stream.start_stream() 
         while stream.is_active():
             time.sleep(0.1)
         #while wd != b'':
         #    stream.write(wd)
         #    wd = self.wf.readframes(1024)
-            #print(wd)
+           #print(wd)
         stream.stop_stream()
         stream.close()
         audio.terminate()
@@ -574,31 +579,31 @@ class msfx_window(tk.Tk):
  
             
 #### end def for msfx_window
-class audio_player(object):
-    def __init__(self):
+#class audio_player(object):
+    #def __init__(self):
    #def playfile(self):
-        audio = pyaudio.PyAudio()
-        self.wf = wave.open('test2.wav','rb')
-        stream = audio.open(format=audio.get_format_from_width(self.wf.getsampwidth()),
-                            channels=self.wf.getnchannels(),
-                            rate=self.wf.getframerate(),
-                            output=True,
-                            stream_callback=self.play_cb)
+        #audio = pyaudio.PyAudio()
+        #self.wf = wave.open('test2.wav','rb')
+        #stream = audio.open(format=audio.get_format_from_width(self.wf.getsampwidth()),
+        #                    channels=self.wf.getnchannels(),
+        #                    rate=self.wf.getframerate(),
+        #                    output=True,
+        #                    stream_callback=self.play_cb)
         #wd = self.wf.readframes(1024)
-        stream.start_stream()
-        while stream.is_active():
-            time.sleep(0.1)
+        #stream.start_stream()
+        #while stream.is_active():
+        #    time.sleep(0.1)
         #while wd != b'':
         #    stream.write(wd)
         #    wd = self.wf.readframes(1024)
             #print(wd)
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
+        #stream.stop_stream()
+        #stream.close()
+        #audio.terminate()
 
-    def play_cb(self, in_data, frame_count, time_info, status):
-        data = self.wf.readframes(frame_count)
-        return (data, pyaudio.paContinue)
+    #def play_cb(self, in_data, frame_count, time_info, status):
+    #    data = self.wf.readframes(frame_count)
+    #    return (data, pyaudio.paContinue)
  
 app = msfx_window() 
 icons = icon_datas()
