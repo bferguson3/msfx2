@@ -11,8 +11,8 @@ import math
 from scipy import signal as sg 
 import tkinter as tk 
 import wave
-import pyaudio # sudo apt-get install python3-pyaudio
 import time 
+import pyaudio  # sudo apt-get install python3-pyaudio
 from threading import Thread
 from tkinter import messagebox
 
@@ -40,8 +40,41 @@ class icon_datas(object):
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x63, 0x0c, 0xe6, 0x1c, 0xac, 0x35, 0x38, 0x67, 0x30, 0xc6, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
         };
         """
-
-
+        self.inv_triangle_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x80, 0x06, 0x60, 0x18, 0x18, 0x60, 0x06, 0x80, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+        self.sawtooth_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0xc6, 0x38, 0x67, 0xac, 0x35, 0xe6, 0x1c, 0x63, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+        self.incline_on_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0xff, 0x18, 0x00, 0x0c, 0x00, 0x06, 0x00, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+        self.triangle_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x01, 0x60, 0x06, 0x18, 0x18, 0x06, 0x60, 0x01, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
+        self.decline_on_data = """
+        #define im_width 16
+        #define im_height 16
+        static char im_bits[] = {
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x83, 0xff, 0x86, 0x00, 0x8c, 0x00, 0x98, 0x00, 0xb0, 0x00, 0xe0, 0x00, 0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+        };
+        """
 envelope_types = {
     #('decline', '0b0000', max(0,-x)),
     #('incline_off', '0b0100', min(1,x)), #then set to 0 after 1 loop
@@ -177,7 +210,7 @@ tone_frequencies = {
 
 '''specific waveform type to msx'''
 class msxwaveform(object):
-    def __init__(self, samplerate=11000, hex_freq=254, length=1, envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
+    def __init__(self, samplerate=22000, hex_freq=254, length=3, envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
         self.length = length
@@ -195,14 +228,15 @@ class msxwaveform(object):
 
         self.samples = self.length * self.samplerate
 
-        self.volume = 255   # max value of simulated envelope
+        self.volume = 60   # max value of simulated envelope
 
         self.env_freq = (3580000/2) / (256*self.env_period) 
 
         self.x = np.arange(self.samples)
 
         self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-        self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
+        #self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
+        self.y = self.volume * self.y 
 
         if self.envelope == True:
             apply_envelope(self)
@@ -256,16 +290,23 @@ def ToByteArr(num, len, endian=1):
 ####
 
 '''writes header to passed msxwaveform and file'''
-def writeheader(wavetest, file):
+def writeheader(wavetest, file, segment):
     global app 
     s = 0
     for b in app.enabled:
         if b.get() == True:
             s += 1
+            print(s)
     #print(len(wavetest.y))
-
+    # Q R S T U V W X
+    #  52535455565758
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
-    file.write(bytes(ToByteArr(36+wavetest.samples*s, 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
+    t = 0
+    if segment == 'a':
+        t = math.floor(wavetest.samples/3)
+    else:
+        t = math.floor(wavetest.samples/3)*2
+    file.write(bytes(ToByteArr(36+(t*s), 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
     file.write(bytes([0x57, 0x41, 0x56, 0x45])) # WAVE)
 
     file.write(bytes([0x66, 0x6d, 0x74, 0x20])) # 'fmt '
@@ -278,7 +319,7 @@ def writeheader(wavetest, file):
     file.write(bytes([0x08, 0x00])) # bits per sample (8)
 
     file.write(bytes([0x64, 0x61, 0x74, 0x61])) # 'data'
-    file.write(bytes(ToByteArr(wavetest.samples*s, 4, endian=0))) # data block size (22050b)
+    file.write(bytes(ToByteArr(t*s, 4, endian=0))) # data block size (22050b)
 #
 
 def apply_envelope(msxwav):
@@ -289,16 +330,16 @@ def apply_envelope(msxwav):
     global envelope_types
     # denominator is num of samples, therefore resolution of envelope
     if msxwav.envelopetype == envelope_types['inv_sawtooth']:
-        y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0) + 1)/2
-
+        y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
+        
     elif msxwav.envelopetype == envelope_types['decline']:
-        y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0) + 1)/2
+        y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
         if len(y) > 32:
             i = 32
             while i < len(y):
                 y[i] = 0
                 i += 1
-
+        #print(y)
     elif msxwav.envelopetype == envelope_types['inv_triangle']:
         y = (sg.sawtooth( ((1 * np.pi * (1/env_len) * x) / 32) + np.pi, 0.5) + 1)/2 #offset by half a second?
 
@@ -336,20 +377,21 @@ def apply_envelope(msxwav):
     # TODO: fix this manual amplitude adjustment for proper hardware levels.
     i = 0
     while i < len(y):
-        y[i] -= 0.4
+        y[i] -= 0.3
         if y[i] < 0:
             y[i] = 0
         i += 1
 
     i = 0
     j = 0
-    perstep = math.ceil(msxwav.samplerate / (32)) 
+    perstep = math.ceil(msxwav.samplerate / (32))
     for c in msxwav.y:
         c = c * y[j]
-        #print(j)
+        #print(c)
         msxwav.y[i] = int(c)
         i += 1
         if i % perstep == 0:
+            #print(c)
             j += 1
             if j >= len(y):
                 j = 0
@@ -363,6 +405,9 @@ class msfx_window(tk.Tk):
         self.title('MSFX2')
 
         self.wf = None
+        self.t = None
+        self.loop = True
+        self.envelope = envelope_types['decline']
 
         self.wave_vals = []
         self.freq_vals_hex = []
@@ -383,7 +428,7 @@ class msfx_window(tk.Tk):
             l = tk.Label(self, text='Channel {} freq:'.format(ltr))
             l.grid(row=i*3, columnspan=3)
             self.freq_vals_hex.append(tk.Label(self, text='Value: $0000'))
-            self.freq_vals_hex[i].grid(row=(i*3)+1, column=5)
+            self.freq_vals_hex[i].grid(row=(i*3)+1, column=4, columnspan=3)
             
             self.tones_txt.append(tk.Label(self, text='Tone: <>'))
             self.tones_txt[i].grid(row=(i*3)+1, column=0, columnspan=3)
@@ -398,7 +443,7 @@ class msfx_window(tk.Tk):
             self.wave_freq_scroll.append(tk.Scale(self, orient=tk.HORIZONTAL, to=4095, resolution=1)) #command=lambda a:self.changefreq(self.wave_freq_scroll[i].get(), self.wave_freq_scroll[i])))
             self.wave_freq_scroll[i].grid(row=(i*3)+2, column=1, columnspan=5, sticky='EW')
             
-            tk.Label(self, text='Enabled?').grid(row=i*3, column=7)
+            tk.Label(self, text='On/Off').grid(row=i*3, column=6, columnspan=2, sticky='e')
             tk.Label(self, text='Music/Noise/Mix?').grid(row=i*3, column=8, columnspan=3)
             
             self.enabled.append(tk.BooleanVar())
@@ -408,15 +453,6 @@ class msfx_window(tk.Tk):
             tk.Radiobutton(self, variable=self.noise[i], value = 0).grid(row=(i*3)+2, column=8)
             tk.Radiobutton(self, variable=self.noise[i], value=1).grid(row=(i*3)+2, column=9)
             tk.Radiobutton(self, variable=self.noise[i], value=2).grid(row=(i*3)+2, column=10)
-            
-            #env_buttons_a=[]
-            #env_buttons_b=[]
-            #env_buttons_c=[]
-            #k = 0
-            #while k < 1:
-            #    env_buttons_a.append(tk.Button(self, image=decline_off_icon, width=20, height=15))
-            #    env_buttons_a[k].grid(row=12)
-            #    k += 1
 
             i += 1
         
@@ -438,8 +474,18 @@ class msfx_window(tk.Tk):
         tk.Button(self, text='<', command=lambda:self.freq_inc(2, -1)).grid(row=8, column=0)
         tk.Button(self, text='>', command=lambda:self.freq_inc(2, 1)).grid(row=8, column=6)
 
-        tk.Button(self, text='Save .WAV', command=self.makefile).grid(row=9, column=3, columnspan=6)
-        tk.Button(self, text='Play last', command=self.playthread).grid(row=9, column=9, columnspan=6)
+        tk.Button(self, text='Generate wave', command=self.makefile).grid(row=14, column=3, columnspan=6)
+        self.playbutton = tk.Button(self, text='Play', command=self.playthread)
+        self.playbutton.grid(row=14, column=8, columnspan=2)
+
+        self.stopbutton = tk.Button(self, text='Stop', command=self.stopplay)
+        self.stopbutton.grid(row=14,column=10,columnspan=2)
+
+        self.audio = pyaudio.PyAudio()
+        self.stream = None
+
+    def stopplay(self):
+        self.loop = False
 
     def freq_inc(self, wav, delta):
         self.wave_freq_scroll[wav].set(self.wave_freq_scroll[wav].get()+delta)
@@ -484,8 +530,9 @@ class msfx_window(tk.Tk):
                 break
             else:
                 self.tones_txt[num].config(text='Tone: <>')
-            
 
+    def change_envelope(self, env):
+        self.envelope = env        
 
     def makefile(self):
         w = []
@@ -496,7 +543,7 @@ class msfx_window(tk.Tk):
             w.append(0)
             if self.enabled[i].get() == True:
                 fre = int(self.wave_freq_entries[i].get())
-                w[i] = msxwaveform(hex_freq = fre, envelope=True, length=2, envelopetype=envelope_types['inv_sawtooth'])
+                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope)#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
@@ -504,106 +551,147 @@ class msfx_window(tk.Tk):
             return
 
         try:
-            f = open('test2.wav', 'wb')
+            f = open('a.wav', 'wb')
             l = 0 
             if w[0] != 0:
-                writeheader(w[0], f)
+                writeheader(w[0], f, 'a')
                 l = len(w[0].y)
             elif w[1] != 0:
-                print('2')
-                writeheader(w[1], f)
+                writeheader(w[1], f, 'a')
                 l = len(w[1].y)
             elif w[2] != 0:
-                writeheader(w[2], f)
+                writeheader(w[2], f, 'a')
                 l = len(w[2].y)
 
             i = 0
-            while i < l-1:
+            while i < math.floor(l/3)-1:
                 if self.enabled[0].get() == True:
                     b = int(w[0].y[i])
+                    b += 127
                     f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
+                    c += 127
                     f.write(bytes([c]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
+                    d += 127
                     f.write(bytes([d]))
                 i += 1
-            f.write(bytes([0]))
-            print('.wav written successfully!')
-            #messagebox.showinfo('Done', 'File saved')
-        except:
-            print('something went wrong.')
-
-        finally:
+            f.write(bytes([0x80]))
+            if (f):
+                f.close()
+            f = open('b.wav','wb')
+            if w[0] != 0:
+                writeheader(w[0], f, 'b')
+            elif w[1] != 0:
+                writeheader(w[1], f, 'b')
+            elif w[2] != 0:
+                writeheader(w[2], f, 'b')
+            while i < l-1:
+                if self.enabled[0].get() == True:
+                    b = int(w[0].y[i])
+                    b += 127
+                    f.write(bytes([b]))
+                if self.enabled[1].get() == True:
+                    c = int(w[1].y[i])
+                    c += 127
+                    f.write(bytes([c]))
+                if self.enabled[2].get() == True:
+                    d = int(w[2].y[i])
+                    d += 127
+                    f.write(bytes([d]))
+                i += 1
+            f.write(bytes([0x80]))
             if(f):
                 f.close()
-
-
-    #def makefile(self):
-        #t = Thread(target=self.makefile_thread, daemon=True)
-        #t.start()
+            print('.wav written successfully!')
+        #except:
+        #    print('something went wrong.')
+        except PermissionError:
+            print("still open!")
+        
 
     def playthread(self):
-        t = Thread(target=self.playfile, daemon=True)
-        t.start()
+        self.playbutton.config(state=tk.DISABLED)
+        self.loop = True
+        self.t = Thread(target=self.playfile, daemon=True)
+        self.t.start()
 
     def playfile(self):
-        audio = pyaudio.PyAudio()
-        self.wf = wave.open('test2.wav','rb')
-        stream = audio.open(format=audio.get_format_from_width(self.wf.getsampwidth()),
+        #playsound.playsound('test2.wav', False)
+        
+        self.wf = wave.open('a.wav','rb')
+        self.stream = self.audio.open(format=self.audio.get_format_from_width(self.wf.getsampwidth()),
                             channels=self.wf.getnchannels(),
                             rate=self.wf.getframerate(),
                             output=True,
                             stream_callback=self.play_cb)
-        #wd = self.wf.readframes(1024)
-        stream.start_stream()
-        while stream.is_active():
-            time.sleep(0.1)
-        #while wd != b'':
-        #    stream.write(wd)
-        #    wd = self.wf.readframes(1024)
-            #print(wd)
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
+        self.stream.start_stream() 
+        while self.stream.is_active():
+                time.sleep(0.01)
+        self.stream.stop_stream()
+        self.stream.close()
+        #loop = True 
+        #while self.loop == True:    
+        self.wf = wave.open('b.wav','rb')
+        self.stream = self.audio.open(format=self.audio.get_format_from_width(self.wf.getsampwidth()),
+                            channels=self.wf.getnchannels(),
+                            rate=self.wf.getframerate(),
+                            output=True)
+                            #stream_callback=self.play_cb)
+
+        #self.stream.start_stream() 
+        #while self.stream.is_active():
+        #    time.sleep(0.01)
+        data = self.wf.readframes(64)
+        while len(data) > 0 and self.loop==True:
+            self.stream.write(data)
+            data = self.wf.readframes(64)
+            if data == b'':
+                self.wf.rewind()
+                data = self.wf.readframes(64)
+            
+        self.stream.stop_stream()
+        self.stream.close()
+        
+        self.playbutton.config(state=tk.NORMAL)
+        #audio.terminate()
 
     def play_cb(self, in_data, frame_count, time_info, status):
+        #print(in_data, frame_count, time_info)
         data = self.wf.readframes(frame_count)
         return (data, pyaudio.paContinue)
  
             
 #### end def for msfx_window
-class audio_player(object):
-    def __init__(self):
-   #def playfile(self):
-        audio = pyaudio.PyAudio()
-        self.wf = wave.open('test2.wav','rb')
-        stream = audio.open(format=audio.get_format_from_width(self.wf.getsampwidth()),
-                            channels=self.wf.getnchannels(),
-                            rate=self.wf.getframerate(),
-                            output=True,
-                            stream_callback=self.play_cb)
-        #wd = self.wf.readframes(1024)
-        stream.start_stream()
-        while stream.is_active():
-            time.sleep(0.1)
-        #while wd != b'':
-        #    stream.write(wd)
-        #    wd = self.wf.readframes(1024)
-            #print(wd)
-        stream.stop_stream()
-        stream.close()
-        audio.terminate()
 
-    def play_cb(self, in_data, frame_count, time_info, status):
-        data = self.wf.readframes(frame_count)
-        return (data, pyaudio.paContinue)
- 
 app = msfx_window() 
 icons = icon_datas()
 inv_sawtooth_icon = tk.BitmapImage(data=icons.inv_sawtooth_data)
 decline_off_icon = tk.BitmapImage(data=icons.decline_off_data)
 incline_off_icon = tk.BitmapImage(data=icons.incline_off_data)
-tk.Button(app, image=inv_sawtooth_icon, width=16, height=16).grid(row=12)
+inv_triangle_icon = tk.BitmapImage(data=icons.inv_triangle_data)
+sawtooth_icon = tk.BitmapImage(data=icons.sawtooth_data)
+incline_on_icon = tk.BitmapImage(data=icons.incline_on_data)
+triangle_icon = tk.BitmapImage(data=icons.triangle_data)
+decline_on_icon = tk.BitmapImage(data=icons.decline_on_data)
+tk.Label(app, text='Vol envelope:').grid(row=12, column=0)
+b_do = tk.Button(app, image=decline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline']))
+b_do.grid(row=12, column=3)
+b_do.config(relief=tk.SUNKEN)
+b_io = tk.Button(app, image=incline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline_off']))
+b_io.grid(row=12, column=4)
+b_is = tk.Button(app, image=inv_sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_sawtooth']))
+b_is.grid(row=12, column=5)
+b_it = tk.Button(app, image=inv_triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_triangle']))
+b_it.grid(row=12, column=6)
+b_s = tk.Button(app, image=sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['sawtooth']))
+b_s.grid(row=12, column=7, sticky='w')
+b_i = tk.Button(app, image=incline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline']))
+b_i.grid(row=12, column=8, sticky='e')
+b_t = tk.Button(app, image=triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['triangle']))
+b_t.grid(row=12, column=9, sticky='w')
+b_d = tk.Button(app, image=decline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline_on']))
+b_d.grid(row=12, column=10, sticky='w')
 app.mainloop() 
