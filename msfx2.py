@@ -408,6 +408,7 @@ class msfx_window(tk.Tk):
         self.t = None
         self.loop = True
         self.envelope = envelope_types['decline']
+        self.modified = False 
 
         self.wave_vals = []
         self.freq_vals_hex = []
@@ -447,7 +448,7 @@ class msfx_window(tk.Tk):
             tk.Label(self, text='Music/Noise/Mix?').grid(row=i*3, column=8, columnspan=3)
             
             self.enabled.append(tk.BooleanVar())
-            tk.Checkbutton(self, variable=self.enabled[i]).grid(row=(i*3)+2, column=7)
+            tk.Checkbutton(self, variable=self.enabled[i], command=self.enabled_cb).grid(row=(i*3)+2, column=7)
             
             self.noise.append(tk.IntVar())
             tk.Radiobutton(self, variable=self.noise[i], value = 0).grid(row=(i*3)+2, column=8)
@@ -474,7 +475,10 @@ class msfx_window(tk.Tk):
         tk.Button(self, text='<', command=lambda:self.freq_inc(2, -1)).grid(row=8, column=0)
         tk.Button(self, text='>', command=lambda:self.freq_inc(2, 1)).grid(row=8, column=6)
 
-        tk.Button(self, text='Generate wave', command=self.makefile).grid(row=14, column=3, columnspan=6)
+        self.gen_wv = tk.Button(self, text='Generate wave', command=self.makefile)
+        #self.mft = False
+        #self.gen_wv = tk.Label(self, text='')
+        self.gen_wv.grid(row=14, column=3, columnspan=6)
         self.playbutton = tk.Button(self, text='Play', command=self.playthread)
         self.playbutton.grid(row=14, column=8, columnspan=2)
 
@@ -484,11 +488,27 @@ class msfx_window(tk.Tk):
         self.audio = pyaudio.PyAudio()
         self.stream = None
 
+    def enabled_cb(self):
+        self.set_modified(True)
+        self.loop = False
+
+    def set_modified(self,tf):
+        self.modified = tf
+        if tf == True:
+            self.gen_wv.config(text='*Generate wave')
+    #        self.gen_wv.config(text='Generating...')
+    #        self.makefile_thread()
+        else:
+            self.gen_wv.config(text='Generate wave')
+            #self.gen_wv.config(text='')
+
     def stopplay(self):
         self.loop = False
 
     def freq_inc(self, wav, delta):
+        #self.modified = True
         self.wave_freq_scroll[wav].set(self.wave_freq_scroll[wav].get()+delta)
+        self.set_modified(True)
 
 
     def changefreq(self, o, num, manual=False):
@@ -508,13 +528,15 @@ class msfx_window(tk.Tk):
                 c = int(c)
             if c > 4095:
                 c = 4095
-
+        #    self.set_modified(True)
             self.wave_freq_entries[num].delete(0,tk.END)
             self.wave_freq_entries[num].insert(0,c)
             self.wave_freq_scroll[num].set(c)
 
         self.freq_vals_hex[num].config(text='Value: $' + format(self.wave_freq_scroll[num].get(), '04x'))
-
+        
+        self.set_modified(True)
+        
         if self.wave_freq_scroll[num].get() == 0:
             self.tones_txt[num].config(text='Tone: <>')
             return
@@ -531,8 +553,34 @@ class msfx_window(tk.Tk):
             else:
                 self.tones_txt[num].config(text='Tone: <>')
 
-    def change_envelope(self, env):
+    def change_envelope(self, env, btn):
+        global b_do
+        global b_io 
+        global b_is 
+        global b_it 
+        global b_s 
+        global b_i 
+        global b_t 
+        global b_d
+        b_do.config(relief=tk.RAISED)
+        b_io.config(relief=tk.RAISED)
+        b_is.config(relief=tk.RAISED)
+        b_it.config(relief=tk.RAISED)
+        b_s.config(relief=tk.RAISED)
+        b_i.config(relief=tk.RAISED)
+        b_t.config(relief=tk.RAISED)
+        b_d.config(relief=tk.RAISED)
         self.envelope = env        
+        btn.config(relief=tk.SUNKEN)
+        self.set_modified(True)
+
+    #def makefile_thread(self):
+        #self.playbutton.config(state=tk.DISABLED)
+        #self.loop = True
+    #    if self.mft == False:
+    #        t = Thread(target=self.makefile, daemon=True)
+    #        t.start()
+    #        self.mft = True
 
     def makefile(self):
         w = []
@@ -564,7 +612,7 @@ class msfx_window(tk.Tk):
                 l = len(w[2].y)
 
             i = 0
-            while i < math.floor(l/3)-1:
+            while i < math.ceil(l/3)+720:
                 if self.enabled[0].get() == True:
                     b = int(w[0].y[i])
                     b += 127
@@ -610,7 +658,9 @@ class msfx_window(tk.Tk):
         #    print('something went wrong.')
         except PermissionError:
             print("still open!")
-        
+
+        self.mft = False
+        self.set_modified(False)
 
     def playthread(self):
         self.playbutton.config(state=tk.DISABLED)
@@ -619,8 +669,6 @@ class msfx_window(tk.Tk):
         self.t.start()
 
     def playfile(self):
-        #playsound.playsound('test2.wav', False)
-        
         self.wf = wave.open('a.wav','rb')
         self.stream = self.audio.open(format=self.audio.get_format_from_width(self.wf.getsampwidth()),
                             channels=self.wf.getnchannels(),
@@ -632,18 +680,12 @@ class msfx_window(tk.Tk):
                 time.sleep(0.01)
         self.stream.stop_stream()
         self.stream.close()
-        #loop = True 
-        #while self.loop == True:    
+        
         self.wf = wave.open('b.wav','rb')
         self.stream = self.audio.open(format=self.audio.get_format_from_width(self.wf.getsampwidth()),
                             channels=self.wf.getnchannels(),
                             rate=self.wf.getframerate(),
                             output=True)
-                            #stream_callback=self.play_cb)
-
-        #self.stream.start_stream() 
-        #while self.stream.is_active():
-        #    time.sleep(0.01)
         data = self.wf.readframes(64)
         while len(data) > 0 and self.loop==True:
             self.stream.write(data)
@@ -656,7 +698,7 @@ class msfx_window(tk.Tk):
         self.stream.close()
         
         self.playbutton.config(state=tk.NORMAL)
-        #audio.terminate()
+        
 
     def play_cb(self, in_data, frame_count, time_info, status):
         #print(in_data, frame_count, time_info)
@@ -667,6 +709,7 @@ class msfx_window(tk.Tk):
 #### end def for msfx_window
 
 app = msfx_window() 
+
 icons = icon_datas()
 inv_sawtooth_icon = tk.BitmapImage(data=icons.inv_sawtooth_data)
 decline_off_icon = tk.BitmapImage(data=icons.decline_off_data)
@@ -677,21 +720,23 @@ incline_on_icon = tk.BitmapImage(data=icons.incline_on_data)
 triangle_icon = tk.BitmapImage(data=icons.triangle_data)
 decline_on_icon = tk.BitmapImage(data=icons.decline_on_data)
 tk.Label(app, text='Vol envelope:').grid(row=12, column=0)
-b_do = tk.Button(app, image=decline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline']))
+
+b_do = tk.Button(app, image=decline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline'], b_do))
 b_do.grid(row=12, column=3)
 b_do.config(relief=tk.SUNKEN)
-b_io = tk.Button(app, image=incline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline_off']))
+b_io = tk.Button(app, image=incline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline_off'], b_io))
 b_io.grid(row=12, column=4)
-b_is = tk.Button(app, image=inv_sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_sawtooth']))
+b_is = tk.Button(app, image=inv_sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_sawtooth'], b_is))
 b_is.grid(row=12, column=5)
-b_it = tk.Button(app, image=inv_triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_triangle']))
+b_it = tk.Button(app, image=inv_triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_triangle'], b_it))
 b_it.grid(row=12, column=6)
-b_s = tk.Button(app, image=sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['sawtooth']))
+b_s = tk.Button(app, image=sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['sawtooth'], b_s))
 b_s.grid(row=12, column=7, sticky='w')
-b_i = tk.Button(app, image=incline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline']))
+b_i = tk.Button(app, image=incline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline'], b_i))
 b_i.grid(row=12, column=8, sticky='e')
-b_t = tk.Button(app, image=triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['triangle']))
+b_t = tk.Button(app, image=triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['triangle'], b_t))
 b_t.grid(row=12, column=9, sticky='w')
-b_d = tk.Button(app, image=decline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline_on']))
+b_d = tk.Button(app, image=decline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline_on'], b_d))
 b_d.grid(row=12, column=10, sticky='w')
+
 app.mainloop() 
