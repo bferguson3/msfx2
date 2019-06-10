@@ -12,6 +12,7 @@ from scipy import signal as sg
 import tkinter as tk 
 import wave
 import time 
+import random
 import pyaudio  # sudo apt-get install python3-pyaudio
 from threading import Thread
 from tkinter import messagebox
@@ -210,7 +211,7 @@ tone_frequencies = {
 
 '''specific waveform type to msx'''
 class msxwaveform(object):
-    def __init__(self, samplerate=22000, hex_freq=254, length=3, envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
+    def __init__(self, samplerate=22000, hex_freq=254, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
         self.length = length
@@ -218,6 +219,7 @@ class msxwaveform(object):
         self.envelopetype = envelopetype
         self.env_period = env_period    # 6992 or 1b50h is ~1s
         self.env_bin = ''
+        self.wf = wf # 'noise', 'mixed'
 
         if env_period >= (256*256):
             self.env_period = 65535
@@ -234,8 +236,22 @@ class msxwaveform(object):
 
         self.x = np.arange(self.samples)
 
-        self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-        #self.y = (self.volume/2) * self.y + (self.volume/2) # adjust amplitude for volume
+        if self.wf == 'tone':
+            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
+            #print(self.y)
+        elif self.wf == 'noise':
+            i = 0
+            a = []
+            while i < self.samples:
+                a.append(random.randrange(0, 32)/32)
+                i += 1
+            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
+            
+        elif self.wf == 'mixed':
+
+            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
+
+
         self.y = self.volume * self.y 
 
         if self.envelope == True:
@@ -296,7 +312,7 @@ def writeheader(wavetest, file, segment):
     for b in app.enabled:
         if b.get() == True:
             s += 1
-            print(s)
+            #print(s)
     #print(len(wavetest.y))
     # Q R S T U V W X
     #  52535455565758
@@ -375,19 +391,20 @@ def apply_envelope(msxwav):
     # end envelope pattern definitions
     
     # TODO: fix this manual amplitude adjustment for proper hardware levels.
-    i = 0
-    while i < len(y):
-        y[i] -= 0.3
-        if y[i] < 0:
-            y[i] = 0
-        i += 1
+    #i = 0
+    #while i < len(y):
+    #    y[i] -= 0.3
+    #    if y[i] < 0:
+    #        y[i] = 0
+    #    i += 1
 
     i = 0
     j = 0
     perstep = math.ceil(msxwav.samplerate / (32))
     for c in msxwav.y:
         c = c * y[j]
-        #print(c)
+        #if c != 0:
+            #print(c)
         msxwav.y[i] = int(c)
         i += 1
         if i % perstep == 0:
@@ -591,31 +608,39 @@ class msfx_window(tk.Tk):
             w.append(0)
             if self.enabled[i].get() == True:
                 fre = int(self.wave_freq_entries[i].get())
-                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope)#, envelopetype=envelope_types['inv_sawtooth'])
+                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf='mixed')#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
             print('enable at least one channel!')
             return
-
+        noise = []
         try:
             f = open('a.wav', 'wb')
             l = 0 
             if w[0] != 0:
                 writeheader(w[0], f, 'a')
                 l = len(w[0].y)
+                
             elif w[1] != 0:
                 writeheader(w[1], f, 'a')
                 l = len(w[1].y)
+
             elif w[2] != 0:
                 writeheader(w[2], f, 'a')
                 l = len(w[2].y)
-
+            noise = msxwaveform(hex_freq=w[0].hex_freq, envelope=True, envelopetype=self.envelope, wf='noise')
+            #print(noise.y)
+            #print(w[0].y)
             i = 0
             while i < math.ceil(l/3)+720:
                 if self.enabled[0].get() == True:
                     b = int(w[0].y[i])
                     b += 127
+                    #if w[0].wf == 'mixed':
+                    #    c = int(noise.y[i])
+                    #    c += 127
+                    #d = b | c            
                     f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
