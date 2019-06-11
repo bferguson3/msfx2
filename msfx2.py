@@ -248,10 +248,33 @@ class msxwaveform(object):
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
             
         elif self.wf == 'mixed':
-
-            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
-
-
+            i = 0
+            a = []
+            while i < self.samples:
+                a.append(random.randrange(0, 32)/32)
+                i += 1
+            n = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
+            t = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
+            # n and t are values -1 to 1 of length "samples".
+            #each "sample", we want to switch which n/t we are copying into the final signal.
+            slen = math.ceil(self.samples / self.freq)
+            print(slen) # 1890
+            i = 0
+            typ = True
+            o = []
+            while i < self.samples:
+                if typ == True:
+                    o.append(n[i])
+                else:
+                    o.append(t[i])
+                if i % slen == 0:
+                    #print(i)
+                    if typ == True:
+                        typ = False
+                    else:
+                        typ = True
+                i += 1
+            self.y = np.asarray(o)
         self.y = self.volume * self.y 
 
         if self.envelope == True:
@@ -629,7 +652,7 @@ class msfx_window(tk.Tk):
             elif w[2] != 0:
                 writeheader(w[2], f, 'a')
                 l = len(w[2].y)
-            noise = msxwaveform(hex_freq=w[0].hex_freq, envelope=True, envelopetype=self.envelope, wf='noise')
+            #noise = msxwaveform(hex_freq=w[0].hex_freq, envelope=True, envelopetype=self.envelope, wf='noise')
             #print(noise.y)
             #print(w[0].y)
             i = 0
