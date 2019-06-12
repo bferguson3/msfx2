@@ -16,6 +16,7 @@ import random
 import pyaudio  # sudo apt-get install python3-pyaudio
 from threading import Thread
 from tkinter import messagebox
+import lfsr 
 
 class icon_datas(object):
     def __init__(self):
