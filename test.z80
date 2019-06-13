@@ -1,0 +1,122 @@
+fname "hw.com"
+;
+; Hello World .COM for MSX-DOS environment
+;
+; Compile:
+;    java -jar glass.jar hellocom.asm hellocom.com
+; Load from MSX-DOS with:
+;    HELLOCOM
+;
+; Constant definitions
+BDOS: equ 05H
+_STROUT: equ 09H
+_CONOUT: equ 02H
+WRTPSG:     equ $0093
+RDPSG:      equ $0096
+EXEBAS:     equ $4646
+BDRCLR:     equ $F3EB
+EXPTBL: equ 0FCC1h
+CALSLT: equ 01Ch
+TEMPVAR: equ $c000
+COUNTER: equ $c001
+REGLOOP: equ $c002
+GICINI: equ $0090
+
+; Compilation address, standard MSX-DOS entry point
+	org 100H
+
+; Program code entry point
+Execute:
+    ;; Initialize PSG
+    ld ix,GICINI
+    ld iy,[EXPTBL-1]
+    call CALSLT 
+
+    ;; set up mixed sound:
+    ld e, %10000000
+    ld a, 7
+    ld ix,WRTPSG
+    ld iy,[EXPTBL-1]
+    call CALSLT 
+
+    ;; enable max vol:
+    ld e, %00001111
+    ld a, 8
+    ld ix,WRTPSG
+    ld iy,[EXPTBL-1]
+    call CALSLT 
+
+    ;; low tone freq:
+    ld e, %00000010
+    ld a, 1
+    ld ix,WRTPSG
+    ld iy,[EXPTBL-1]
+    call CALSLT 
+
+    ;; middle buzz freq 
+    ld e, %00000111
+    ld a, 6
+    ld ix,WRTPSG
+    ld iy,[EXPTBL-1]
+    call CALSLT 
+
+    ;; print all PSG registers 0-d
+    xor a 
+.reg_print:
+    ld [REGLOOP], a 
+    xor a 
+    ld [TEMPVAR], a 
+    ld a, [REGLOOP]
+    ld ix,RDPSG
+    ld iy,[EXPTBL-1]
+    call CALSLT 
+.break:
+    call dos_printb_A
+    ld a, [REGLOOP] 
+    inc a 
+    cp 14 
+    jr z, .endreg_print
+    jr .reg_print 
+.endreg_print:
+  ret
+
+
+dos_printb_A:
+;; same but for DOS
+;; Clobbers A B C D E 
+    ld [TEMPVAR], a 
+    ld a, 8
+    ld [COUNTER], a 
+.printloop:
+    ld [COUNTER], a 
+    ld a, [TEMPVAR]
+    sla a 
+    jr c, .print1
+    ld [TEMPVAR], a
+    ld c, _CONOUT
+    ld e, "0"
+    call BDOS
+    ld a, [COUNTER]
+    dec a  
+    jr nz, .printloop
+  jr .endprint 
+.print1:
+    ld [TEMPVAR], a 
+    ld c, _CONOUT 
+    ld e, "1"
+    call BDOS 
+    ld a, [COUNTER] 
+    dec a
+    jr nz, .printloop 
+.endprint:
+    ld c, _STROUT
+    ld de, newLine
+    call BDOS 
+
+  ret
+
+
+newLine:
+    db $0d, $0a, $24
+
+;stringtest: EQU 1002H

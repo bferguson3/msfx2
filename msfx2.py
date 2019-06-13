@@ -243,23 +243,28 @@ class msxwaveform(object):
         elif self.wf == 'noise':
             i = 0
             a = []
+            #l = lfsr.lfsr()
+            slen = math.ceil(self.samples / self.freq)
             while i < self.samples:
-                a.append(random.randrange(0, 32)/32)
+                #a.append(int(l.tick_output(8),2)/256)
+                a.append(random.randrange(0,slen)/slen)
                 i += 1
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
             
         elif self.wf == 'mixed':
             i = 0
             a = []
+            #l = lfsr.lfsr()
+            slen = math.ceil(self.samples / self.freq)
             while i < self.samples:
-                a.append(random.randrange(0, 32)/32)
+            #    a.append(int(l.tick_output(5),2)/32)
+                a.append(random.randrange(0,slen)/slen)
                 i += 1
             n = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
             t = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
             # n and t are values -1 to 1 of length "samples".
             #each "sample", we want to switch which n/t we are copying into the final signal.
-            slen = math.ceil(self.samples / self.freq)
-            print(slen) # 1890
+            slen = 100 #2000h = 56f 
             i = 0
             typ = True
             o = []
@@ -269,7 +274,6 @@ class msxwaveform(object):
                 else:
                     o.append(t[i])
                 if i % slen == 0:
-                    #print(i)
                     if typ == True:
                         typ = False
                     else:
@@ -632,13 +636,20 @@ class msfx_window(tk.Tk):
             w.append(0)
             if self.enabled[i].get() == True:
                 fre = int(self.wave_freq_entries[i].get())
-                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf='mixed')#, envelopetype=envelope_types['inv_sawtooth'])
+                #wf = 'tone'
+                #print(self.noise[i])
+                if self.noise[i].get() == 0:
+                    wf = 'tone'
+                elif self.noise[i].get() == 1:
+                    wf = 'noise'
+                elif self.noise[i].get() == 2:
+                    wf = 'mixed'
+                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf=wf)#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
             print('enable at least one channel!')
             return
-        noise = []
         try:
             f = open('a.wav', 'wb')
             l = 0 
@@ -653,18 +664,11 @@ class msfx_window(tk.Tk):
             elif w[2] != 0:
                 writeheader(w[2], f, 'a')
                 l = len(w[2].y)
-            #noise = msxwaveform(hex_freq=w[0].hex_freq, envelope=True, envelopetype=self.envelope, wf='noise')
-            #print(noise.y)
-            #print(w[0].y)
             i = 0
             while i < math.ceil(l/3)+720:
                 if self.enabled[0].get() == True:
                     b = int(w[0].y[i])
-                    b += 127
-                    #if w[0].wf == 'mixed':
-                    #    c = int(noise.y[i])
-                    #    c += 127
-                    #d = b | c            
+                    b += 127          
                     f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
