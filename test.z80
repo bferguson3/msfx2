@@ -33,7 +33,7 @@ Execute:
     call CALSLT 
 
     ;; set up mixed sound:
-    ld e, %10000000
+    ld e, %10110111
     ld a, 7
     ld ix,WRTPSG
     ld iy,[EXPTBL-1]
@@ -53,8 +53,14 @@ Execute:
     ld iy,[EXPTBL-1]
     call CALSLT 
 
+    ;ld e, %00001010
+    ;ld a, 3
+    ;ld ix,WRTPSG
+    ;ld iy,[EXPTBL-1]
+    ;call CALSLT 
+
     ;; middle buzz freq 
-    ld e, %00000111
+    ld e, %00000000
     ld a, 6
     ld ix,WRTPSG
     ld iy,[EXPTBL-1]

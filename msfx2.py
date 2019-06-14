@@ -212,7 +212,7 @@ tone_frequencies = {
 
 '''specific waveform type to msx'''
 class msxwaveform(object):
-    def __init__(self, samplerate=22000, hex_freq=254, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
+    def __init__(self, samplerate=22000, hex_freq=254, noise_fr = 0, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
         self.length = length
@@ -221,6 +221,7 @@ class msxwaveform(object):
         self.env_period = env_period    # 6992 or 1b50h is ~1s
         self.env_bin = ''
         self.wf = wf # 'noise', 'mixed'
+        self.noise_fr = noise_fr
 
         if env_period >= (256*256):
             self.env_period = 65535
@@ -237,49 +238,52 @@ class msxwaveform(object):
 
         self.x = np.arange(self.samples)
 
-        if self.wf == 'tone':
+        if self.wf == 'noise':
+            self.noise_freq = (3580000) / (16*self.noise_fr)
+            i = 0
+            j = math.ceil((self.samples / self.noise_freq)/2)
+            a = []
+            r = random.randrange(0,32)/32
+            while i < self.samples:
+                a.append(r)
+                if i % j == 0:
+                    r = random.randrange(0,32)/32
+                i += 1
+            self.y = np.asarray(a)
+        elif self.wf == 'tone':
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-            #print(self.y)
-        elif self.wf == 'noise':
-            i = 0
-            a = []
+        else:
+            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
+        #elif self.wf == 'mixed':
+        #    i = 0
+        #    a = []
             #l = lfsr.lfsr()
-            slen = math.ceil(self.samples / self.freq)
-            while i < self.samples:
-                #a.append(int(l.tick_output(8),2)/256)
-                a.append(random.randrange(0,slen)/slen)
-                i += 1
-            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
-            
-        elif self.wf == 'mixed':
-            i = 0
-            a = []
-            #l = lfsr.lfsr()
-            slen = math.ceil(self.samples / self.freq)
-            while i < self.samples:
+        #    slen = math.ceil(self.samples / self.freq)
+        #    while i < self.samples:
             #    a.append(int(l.tick_output(5),2)/32)
-                a.append(random.randrange(0,slen)/slen)
-                i += 1
-            n = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
-            t = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
+        #        a.append(random.randrange(0,slen)/slen)
+        #        i += 1
+        #    n = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
+        #    t = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
             # n and t are values -1 to 1 of length "samples".
             #each "sample", we want to switch which n/t we are copying into the final signal.
-            slen = 100 #2000h = 56f 
-            i = 0
-            typ = True
-            o = []
-            while i < self.samples:
-                if typ == True:
-                    o.append(n[i])
-                else:
-                    o.append(t[i])
-                if i % slen == 0:
-                    if typ == True:
-                        typ = False
-                    else:
-                        typ = True
-                i += 1
-            self.y = np.asarray(o)
+        #    slen = 100 #2000h = 56f 
+        #    i = 0
+        #    typ = True
+        #    o = []
+        #    while i < self.samples:
+        #        if typ == True:
+        #           o.append(n[i])
+        #        else:
+        #            o.append(t[i])
+        #        if i % slen == 0:
+        #            if typ == True:
+        #                typ = False
+        #            else:
+        #                typ = True
+        #        i += 1
+        #    self.y = np.asarray(o)
+        
         self.y = self.volume * self.y 
 
         if self.envelope == True:
@@ -340,10 +344,7 @@ def writeheader(wavetest, file, segment):
     for b in app.enabled:
         if b.get() == True:
             s += 1
-            #print(s)
-    #print(len(wavetest.y))
-    # Q R S T U V W X
-    #  52535455565758
+    
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
     t = 0
     if segment == 'a':
@@ -431,9 +432,13 @@ def apply_envelope(msxwav):
     perstep = math.ceil(msxwav.samplerate / (32))
     for c in msxwav.y:
         c = c * y[j]
+        #if msxwav.wf != 'tone':
+        #    n = msxwav.noise[i] * y[j]
         #if c != 0:
             #print(c)
         msxwav.y[i] = int(c)
+        #if msxwav.wf != 'tone':
+        #    msxwav.noise[i] = int(n)
         i += 1
         if i % perstep == 0:
             #print(c)
@@ -520,6 +525,13 @@ class msfx_window(tk.Tk):
         tk.Button(self, text='<', command=lambda:self.freq_inc(2, -1)).grid(row=8, column=0)
         tk.Button(self, text='>', command=lambda:self.freq_inc(2, 1)).grid(row=8, column=6)
 
+        tk.Label(self, text='Noise freq:').grid(row=12,column=0)
+        self.wave_freq_scroll.append(tk.Scale(self, orient=tk.HORIZONTAL, to=31, resolution=1)) #command=lambda a:self.changefreq(self.wave_freq_scroll[i].get(), self.wave_freq_scroll[i])))
+        self.wave_freq_scroll[3].grid(row=12, column=1, columnspan=8, sticky='EW')
+        self.wave_freq_scroll[3].configure(command=lambda a: self.changefreq(self.wave_freq_scroll[3].get(), 3))
+        self.noiselbl = tk.Label(self, text='0 Hz')
+        self.noiselbl.grid(row=12,column=9, columnspan=2)
+
         self.gen_wv = tk.Button(self, text='Generate wave', command=self.makefile)
         #self.mft = False
         #self.gen_wv = tk.Label(self, text='')
@@ -557,6 +569,13 @@ class msfx_window(tk.Tk):
 
 
     def changefreq(self, o, num, manual=False):
+        if num == 3:
+            if self.wave_freq_scroll[3].get() == 0:
+                return
+            f = math.floor((3580000/2)/(self.wave_freq_scroll[3].get()*16))
+            self.noiselbl.configure(text=str(f)+' Hz')
+            return
+
         if manual == False:
             self.wave_freq_entries[num].delete(0,tk.END)
             c = self.wave_freq_scroll[num].get()
@@ -629,22 +648,20 @@ class msfx_window(tk.Tk):
 
     def makefile(self):
         w = []
-
         s = 0
         i = 0
         while i < len(self.enabled):
             w.append(0)
             if self.enabled[i].get() == True:
                 fre = int(self.wave_freq_entries[i].get())
-                #wf = 'tone'
-                #print(self.noise[i])
+                nf = self.wave_freq_scroll[3].get()
                 if self.noise[i].get() == 0:
                     wf = 'tone'
                 elif self.noise[i].get() == 1:
                     wf = 'noise'
                 elif self.noise[i].get() == 2:
-                    wf = 'mixed'
-                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf=wf)#, envelopetype=envelope_types['inv_sawtooth'])
+                    wf = 'mixed' 
+                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf=wf, noise_fr=nf)#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
@@ -656,11 +673,9 @@ class msfx_window(tk.Tk):
             if w[0] != 0:
                 writeheader(w[0], f, 'a')
                 l = len(w[0].y)
-                
             elif w[1] != 0:
                 writeheader(w[1], f, 'a')
                 l = len(w[1].y)
-
             elif w[2] != 0:
                 writeheader(w[2], f, 'a')
                 l = len(w[2].y)
@@ -772,24 +787,24 @@ sawtooth_icon = tk.BitmapImage(data=icons.sawtooth_data)
 incline_on_icon = tk.BitmapImage(data=icons.incline_on_data)
 triangle_icon = tk.BitmapImage(data=icons.triangle_data)
 decline_on_icon = tk.BitmapImage(data=icons.decline_on_data)
-tk.Label(app, text='Vol envelope:').grid(row=12, column=0)
+tk.Label(app, text='Vol envelope:').grid(row=13, column=0)
 
 b_do = tk.Button(app, image=decline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline'], b_do))
-b_do.grid(row=12, column=3)
+b_do.grid(row=13, column=3)
 b_do.config(relief=tk.SUNKEN)
 b_io = tk.Button(app, image=incline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline_off'], b_io))
-b_io.grid(row=12, column=4)
+b_io.grid(row=13, column=4)
 b_is = tk.Button(app, image=inv_sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_sawtooth'], b_is))
-b_is.grid(row=12, column=5)
+b_is.grid(row=13, column=5)
 b_it = tk.Button(app, image=inv_triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['inv_triangle'], b_it))
-b_it.grid(row=12, column=6)
+b_it.grid(row=13, column=6)
 b_s = tk.Button(app, image=sawtooth_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['sawtooth'], b_s))
-b_s.grid(row=12, column=7, sticky='w')
+b_s.grid(row=13, column=7, sticky='w')
 b_i = tk.Button(app, image=incline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['incline'], b_i))
-b_i.grid(row=12, column=8, sticky='e')
+b_i.grid(row=13, column=8, sticky='e')
 b_t = tk.Button(app, image=triangle_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['triangle'], b_t))
-b_t.grid(row=12, column=9, sticky='w')
+b_t.grid(row=13, column=9, sticky='w')
 b_d = tk.Button(app, image=decline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline_on'], b_d))
-b_d.grid(row=12, column=10, sticky='w')
+b_d.grid(row=13, column=10, sticky='w')
 
 app.mainloop() 
