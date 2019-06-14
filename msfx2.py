@@ -222,6 +222,7 @@ class msxwaveform(object):
         self.env_bin = ''
         self.wf = wf # 'noise', 'mixed'
         self.noise_fr = noise_fr
+        self.noise = -1
 
         if env_period >= (256*256):
             self.env_period = 65535
@@ -253,37 +254,37 @@ class msxwaveform(object):
         elif self.wf == 'tone':
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
         else:
+            self.noise_freq = (3580000) / (16*self.noise_fr)
+            i = 0
+            j = math.ceil((self.samples / self.noise_freq)/2)
+            a = []
+            r = random.randrange(0,32)/32
+            while i < self.samples:
+                a.append(r)
+                if i % j == 0:
+                    r = random.randrange(0,32)/32
+                i += 1
+            self.noise = np.asarray(a)
+            self.noise = self.noise * self.volume
+            #print(self.noise)
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-        #elif self.wf == 'mixed':
-        #    i = 0
-        #    a = []
-            #l = lfsr.lfsr()
-        #    slen = math.ceil(self.samples / self.freq)
-        #    while i < self.samples:
-            #    a.append(int(l.tick_output(5),2)/32)
-        #        a.append(random.randrange(0,slen)/slen)
-        #        i += 1
-        #    n = sg.square(2*np.pi*self.freq*self.x/self.samplerate, a)
-        #    t = sg.square(2*np.pi*self.freq*self.x/self.samplerate)
-            # n and t are values -1 to 1 of length "samples".
-            #each "sample", we want to switch which n/t we are copying into the final signal.
-        #    slen = 100 #2000h = 56f 
-        #    i = 0
-        #    typ = True
-        #    o = []
-        #    while i < self.samples:
-        #        if typ == True:
-        #           o.append(n[i])
-        #        else:
-        #            o.append(t[i])
-        #        if i % slen == 0:
-        #            if typ == True:
-        #                typ = False
-        #            else:
-        #                typ = True
-        #        i += 1
-        #    self.y = np.asarray(o)
-        
+            # slen = 300
+            # i = 0
+            # typ = True 
+            # o = []
+            # while i < self.samples:
+            #     if typ == True:
+            #         o.append(a[i])
+            #     else:
+            #         o.append(t[i])
+            #     if i % slen == 0:
+            #         if typ == True:
+            #             typ = False 
+            #         else:
+            #             typ = True 
+            #     i += 1
+            # self.y = np.asarray(o)
+
         self.y = self.volume * self.y 
 
         if self.envelope == True:
@@ -341,30 +342,46 @@ def ToByteArr(num, len, endian=1):
 def writeheader(wavetest, file, segment):
     global app 
     s = 0
-    for b in app.enabled:
-        if b.get() == True:
+    i = 0
+    channels = 1
+    while i < 3:
+        if app.enabled[i].get() == True:
             s += 1
-    
+            if app.noise[i].get() == 2:
+                channels = 2
+        i += 1
+    #for b in app.enabled:
+    #    if b.get() == True:
+    #        s += 1
+    #channels = 1
+    #for b in app.noise:
+    #    if b.get() == 2:
+    #        channels = 2
+    #print(channels)
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
     t = 0
     if segment == 'a':
         t = math.floor(wavetest.samples/3)
     else:
         t = math.floor(wavetest.samples/3)*2
-    file.write(bytes(ToByteArr(36+(t*s), 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
+    file.write(bytes(ToByteArr(36+(t*s*channels), 4, endian=0)))# 36 + data size (lend) 22050 or $68 $ac for 44100
     file.write(bytes([0x57, 0x41, 0x56, 0x45])) # WAVE)
 
     file.write(bytes([0x66, 0x6d, 0x74, 0x20])) # 'fmt '
     file.write(bytes([0x10, 0x00, 0x00, 0x00])) # pcm (lend)
     file.write(bytes([0x01, 0x00])) # pcm (lend)
-    file.write(bytes([0x01, 0x00])) # mono (lend)
+    if channels == 2:
+        c = 0x02 
+    else:
+        c = 0x01
+    file.write(bytes([c, 0x00])) # mono (lend)
     file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0)))## 22050 (lend) = $22 56, or $44 ac for 44100
-    file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
-    file.write(bytes([0x01, 0x00])) # block align - bytes for 1 sample (lend)
+    file.write(bytes(ToByteArr(wavetest.samplerate*2*channels, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
+    file.write(bytes([c, 0x00])) # block align - bytes for 1 sample (lend)
     file.write(bytes([0x08, 0x00])) # bits per sample (8)
 
     file.write(bytes([0x64, 0x61, 0x74, 0x61])) # 'data'
-    file.write(bytes(ToByteArr(t*s, 4, endian=0))) # data block size (22050b)
+    file.write(bytes(ToByteArr(t*s*channels, 4, endian=0))) # data block size (22050b)
 #
 
 def apply_envelope(msxwav):
@@ -420,28 +437,26 @@ def apply_envelope(msxwav):
     # end envelope pattern definitions
     
     # TODO: fix this manual amplitude adjustment for proper hardware levels.
-    #i = 0
-    #while i < len(y):
-    #    y[i] -= 0.3
-    #    if y[i] < 0:
-    #        y[i] = 0
-    #    i += 1
+    i = 0
+    while i < len(y):
+        y[i] -= 0.33
+        if y[i] < 0:
+            y[i] = 0
+        i += 1
 
     i = 0
     j = 0
     perstep = math.ceil(msxwav.samplerate / (32))
     for c in msxwav.y:
         c = c * y[j]
-        #if msxwav.wf != 'tone':
-        #    n = msxwav.noise[i] * y[j]
-        #if c != 0:
-            #print(c)
+        if msxwav.wf == 'mixed':
+            #print(msxwav.noise[i])
+            n = msxwav.noise[i] * y[j]
         msxwav.y[i] = int(c)
-        #if msxwav.wf != 'tone':
-        #    msxwav.noise[i] = int(n)
+        if msxwav.wf == 'mixed':
+            msxwav.noise[i] = int(n)
         i += 1
         if i % perstep == 0:
-            #print(c)
             j += 1
             if j >= len(y):
                 j = 0
@@ -650,6 +665,8 @@ class msfx_window(tk.Tk):
         w = []
         s = 0
         i = 0
+        stereonoise = False
+        noisechan = 0
         while i < len(self.enabled):
             w.append(0)
             if self.enabled[i].get() == True:
@@ -661,6 +678,8 @@ class msfx_window(tk.Tk):
                     wf = 'noise'
                 elif self.noise[i].get() == 2:
                     wf = 'mixed' 
+                    stereonoise = True
+                    noisechan = i
                 w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf=wf, noise_fr=nf)#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
@@ -685,14 +704,26 @@ class msfx_window(tk.Tk):
                     b = int(w[0].y[i])
                     b += 127          
                     f.write(bytes([b]))
+                    if stereonoise:
+                        b = int(w[noisechan].noise[i])
+                        b += 127
+                        f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
                     c += 127
                     f.write(bytes([c]))
+                    if stereonoise:
+                        b = int(w[noisechan].noise[i])
+                        b += 127
+                        f.write(bytes([b]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
                     d += 127
                     f.write(bytes([d]))
+                    if stereonoise:
+                        b = int(w[noisechan].noise[i])
+                        b += 127
+                        f.write(bytes([b]))
                 i += 1
             f.write(bytes([0x80]))
             if (f):
@@ -709,14 +740,26 @@ class msfx_window(tk.Tk):
                     b = int(w[0].y[i])
                     b += 127
                     f.write(bytes([b]))
+                    if stereonoise:
+                        b = int(w[noisechan].noise[i])
+                        b += 127
+                        f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
                     c += 127
                     f.write(bytes([c]))
+                    if stereonoise:
+                        b = int(w[noisechan].noise[i])
+                        b += 127
+                        f.write(bytes([b]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
                     d += 127
                     f.write(bytes([d]))
+                    if stereonoise:
+                        b = int(w[noisechan].noise[i])
+                        b += 127
+                        f.write(bytes([b]))
                 i += 1
             f.write(bytes([0x80]))
             if(f):
