@@ -462,6 +462,123 @@ def apply_envelope(msxwav):
                 j = 0
             
 
+class asm_window(tk.Tk):
+    def __init__(self, wf):
+        super().__init__()
+
+        self.title('z80 listing')
+
+        self.parent = wf
+
+        self.dos = tk.BooleanVar()
+        self.init = tk.BooleanVar()
+        self.vol = tk.BooleanVar()
+        self.defs = tk.BooleanVar()
+
+        self.bframe = tk.Frame(self)
+        self.bframe.pack(side=tk.TOP)
+        self.cb_lbls = tk.Checkbutton(self.bframe, text='Add defs', command=lambda:self.cb(self.defs))
+        self.cb_lbls.pack(side=tk.LEFT)
+        self.cb_dos = tk.Checkbutton(self.bframe, text='Interslot', command=lambda:self.cb(self.dos))
+        self.cb_dos.pack(side=tk.LEFT) # interslot call?
+        self.cb_init = tk.Checkbutton(self.bframe, text='PSG Init', command=lambda:self.cb(self.init))
+        self.cb_init.pack(side=tk.LEFT) # include psg init?
+        self.cb_vol = tk.Checkbutton(self.bframe, text='Volume', command=lambda:self.cb(self.vol))
+        self.cb_vol.pack(side=tk.LEFT)# this is only enabled if envelope is false
+        
+        
+        self.textbox = tk.Text(self, width=80, height=40)
+        self.textbox.pack(side=tk.BOTTOM)
+        
+        self.refresh(self.parent)
+
+    def cb(self, var):
+        global app
+        if var.get() == False:
+            var.set(True)
+        else:
+            var.set(False)
+        self.refresh(app)
+
+    def refresh(self, wf):
+        self.textbox.delete(1.0, tk.END)
+
+        self.textbox.insert(tk.END, ' ; Made with MSFX2!\n')
+        self.textbox.insert(tk.END, ' ;  (Remember to reset channels after the desired\n ;   number of frames have passed.)\n\n')
+        if self.defs.get():
+            self.add_asm_text(self.dos.get(), -2, None, self.defs.get())
+        
+        # INIT - optional
+        if self.init.get():
+            self.textbox.insert(tk.END, ' ; Init PSG\n')
+            self.add_asm_text(self.dos.get(), -1, None, self.defs.get()) # r#, value
+            self.textbox.insert(tk.END, '\n')
+        # TONE/NOISE IO (r7)
+        i = 0
+        while i < 3:
+            if wf.enabled[i].get():
+                self.textbox.insert(tk.END, ' ; Channel ' + str(i+1) + ' tone\n')
+                self.add_asm_text(self.dos.get(), (i*2), wf.wave_freq_scroll[i].get(), self.defs.get())
+                self.textbox.insert(tk.END, '\n')
+            i += 1
+        # VOL / ENVELOPE - optional if envelope = False (r8, r9, ra)
+        
+        # TONE FREQ (r0-5) (if wf 0 or 2)
+
+        # NOISE FREQ (r6) (if wf 1 or 2)
+
+        # ENVELOPE FREQ (if env=true) (rb, rc)
+
+        # ENVELOPE SHAPE (if env=true) (rd)
+
+        
+        self.textbox.insert(tk.END,'')
+        return
+    
+    def add_asm_text(self, dos, reg, val, defs):
+        if type(reg) == str:
+            reg = int(reg,16)
+        GICINI = '$0090'
+        EXPTBL = '$fcc1'
+        CALSLT = '$1c'
+        WRTPSG = '$0093'#:     equ $0093
+        out = ''
+        if defs:
+            GICINI = 'GICINI'
+            EXPTBL = 'EXPTBL'
+            CALSLT = 'CALSLT'
+            WRTPSG = 'WRTPSG'
+        if reg == -2:
+            if self.init.get():
+                out = out + 'GICINI: equ $0090\n'
+            if dos:
+                out = out + 'EXPTBL: equ $fcc1\n'
+                out = out + 'CALSLT: equ $1c\n'
+            out = out + 'WRTPSG: equ $0093\n'
+            out = out + '\n'
+
+        #print(dos, reg, val)
+
+        if dos == False:
+            if reg > -1:
+                out = out + '   ld a, ' + str(reg) + '\n'
+                out = out + '   ld e, ' + str(val) + '\n'
+                out = out + '   call ' + WRTPSG + '\n'
+                if reg == 0 or reg == 2 or reg == 4:
+                    out = out + '   ld a, ' + str(reg+1) + '\n'
+                    out = out + '   ld e, ' + str(val) + '\n'
+                    out = out + '   call ' + WRTPSG + '\n'
+            elif reg == -1:
+                out = out + '   call ' + GICINI + '\n'
+        else:
+            if reg == -1:
+                out = out + '   ld ix, ' +GICINI + '\n'
+                out = out + '   ld iy, [' + EXPTBL + '-1]\n'
+            out = out + '   call ' + CALSLT + '\n'
+        self.textbox.insert(tk.END, out)
+        return
+
+
 '''actual app class'''
 class msfx_window(tk.Tk):
     def __init__(self):
@@ -474,6 +591,7 @@ class msfx_window(tk.Tk):
         self.loop = True
         self.envelope = envelope_types['decline']
         self.modified = False 
+        self.tw = None
 
         self.wave_vals = []
         self.freq_vals_hex = []
@@ -516,9 +634,9 @@ class msfx_window(tk.Tk):
             tk.Checkbutton(self, variable=self.enabled[i], command=self.enabled_cb).grid(row=(i*3)+2, column=7)
             
             self.noise.append(tk.IntVar())
-            tk.Radiobutton(self, variable=self.noise[i], value = 0).grid(row=(i*3)+2, column=8)
-            tk.Radiobutton(self, variable=self.noise[i], value=1).grid(row=(i*3)+2, column=9)
-            tk.Radiobutton(self, variable=self.noise[i], value=2).grid(row=(i*3)+2, column=10)
+            tk.Radiobutton(self, variable=self.noise[i], value = 0, command=self.enabled_cb).grid(row=(i*3)+2, column=8)
+            tk.Radiobutton(self, variable=self.noise[i], value=1, command=self.enabled_cb).grid(row=(i*3)+2, column=9)
+            tk.Radiobutton(self, variable=self.noise[i], value=2, command=self.enabled_cb).grid(row=(i*3)+2, column=10)
 
             i += 1
         
@@ -533,12 +651,12 @@ class msfx_window(tk.Tk):
         w = self.wave_vals[2]
         self.wave_vals[2].trace("w", lambda name, index, mode, w=w: self.changefreq(w.get(), 2, True))
         
-        tk.Button(self, text='<', command=lambda:self.freq_inc(0, -1)).grid(row=2, column=0)
-        tk.Button(self, text='>', command=lambda:self.freq_inc(0, 1)).grid(row=2, column=6)
-        tk.Button(self, text='<', command=lambda:self.freq_inc(1, -1)).grid(row=5, column=0)
-        tk.Button(self, text='>', command=lambda:self.freq_inc(1, 1)).grid(row=5, column=6)
-        tk.Button(self, text='<', command=lambda:self.freq_inc(2, -1)).grid(row=8, column=0)
-        tk.Button(self, text='>', command=lambda:self.freq_inc(2, 1)).grid(row=8, column=6)
+        tk.Button(self, text='<', command=lambda:self.freq_inc(0, -1)).grid(row=2, column=0, sticky='e')
+        tk.Button(self, text='>', command=lambda:self.freq_inc(0, 1)).grid(row=2, column=6, sticky='w')
+        tk.Button(self, text='<', command=lambda:self.freq_inc(1, -1)).grid(row=5, column=0, sticky='e')
+        tk.Button(self, text='>', command=lambda:self.freq_inc(1, 1)).grid(row=5, column=6, sticky='w')
+        tk.Button(self, text='<', command=lambda:self.freq_inc(2, -1)).grid(row=8, column=0, sticky='e')
+        tk.Button(self, text='>', command=lambda:self.freq_inc(2, 1)).grid(row=8, column=6, sticky='w')
 
         tk.Label(self, text='Noise freq:').grid(row=12,column=0)
         self.wave_freq_scroll.append(tk.Scale(self, orient=tk.HORIZONTAL, to=31, resolution=1)) #command=lambda a:self.changefreq(self.wave_freq_scroll[i].get(), self.wave_freq_scroll[i])))
@@ -547,18 +665,29 @@ class msfx_window(tk.Tk):
         self.noiselbl = tk.Label(self, text='0 Hz')
         self.noiselbl.grid(row=12,column=9, columnspan=2)
 
+        self.exp_asm = tk.Button(self,text='Export ASM', command=self.export_asm)
+        self.exp_asm.grid(row=18,column=1,columnspan=3)
+
         self.gen_wv = tk.Button(self, text='Generate wave', command=self.makefile)
         #self.mft = False
         #self.gen_wv = tk.Label(self, text='')
-        self.gen_wv.grid(row=14, column=3, columnspan=6)
+        self.gen_wv.grid(row=18, column=4, columnspan=6)
         self.playbutton = tk.Button(self, text='Play', command=self.playthread)
-        self.playbutton.grid(row=14, column=8, columnspan=2)
+        self.playbutton.grid(row=18, column=8, columnspan=2)
 
         self.stopbutton = tk.Button(self, text='Stop', command=self.stopplay)
-        self.stopbutton.grid(row=14,column=10,columnspan=2)
+        self.stopbutton.grid(row=18,column=10,columnspan=2)
 
         self.audio = pyaudio.PyAudio()
         self.stream = None
+
+    def export_asm(self):
+        if self.tw == None:
+            self.tw = asm_window(self)
+        else:
+            self.tw.refresh(self)
+            self.tw.lift()
+        return
 
     def enabled_cb(self):
         self.set_modified(True)
@@ -589,6 +718,7 @@ class msfx_window(tk.Tk):
                 return
             f = math.floor((3580000/2)/(self.wave_freq_scroll[3].get()*16))
             self.noiselbl.configure(text=str(f)+' Hz')
+            self.set_modified(True)
             return
 
         if manual == False:
@@ -641,6 +771,7 @@ class msfx_window(tk.Tk):
         global b_i 
         global b_t 
         global b_d
+        global b_off
         b_do.config(relief=tk.RAISED)
         b_io.config(relief=tk.RAISED)
         b_is.config(relief=tk.RAISED)
@@ -649,9 +780,15 @@ class msfx_window(tk.Tk):
         b_i.config(relief=tk.RAISED)
         b_t.config(relief=tk.RAISED)
         b_d.config(relief=tk.RAISED)
-        self.envelope = env        
+        b_off.config(relief=tk.RAISED)
+        if env != None:
+            self.envelope = env
+            self.envyesno = True
+        else:
+            self.envyesno = False
         btn.config(relief=tk.SUNKEN)
         self.set_modified(True)
+    
 
     #def makefile_thread(self):
         #self.playbutton.config(state=tk.DISABLED)
@@ -670,8 +807,15 @@ class msfx_window(tk.Tk):
         while i < len(self.enabled):
             w.append(0)
             if self.enabled[i].get() == True:
-                fre = int(self.wave_freq_entries[i].get())
+                fre = self.wave_freq_entries[i].get()
+                if fre == '' or fre == 0:
+                    self.freq_inc(i, 1)
+                    fre = '1' 
+                fre = int(fre)
                 nf = self.wave_freq_scroll[3].get()
+                if nf == '' or nf == 0:
+                    nf = 1
+                    self.wave_freq_scroll[3].set(1)
                 if self.noise[i].get() == 0:
                     wf = 'tone'
                 elif self.noise[i].get() == 1:
@@ -680,7 +824,7 @@ class msfx_window(tk.Tk):
                     wf = 'mixed' 
                     stereonoise = True
                     noisechan = i
-                w[i] = msxwaveform(hex_freq = fre, envelope=True, envelopetype=self.envelope, wf=wf, noise_fr=nf)#, envelopetype=envelope_types['inv_sawtooth'])
+                w[i] = msxwaveform(hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, wf=wf, noise_fr=nf)#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
@@ -849,5 +993,8 @@ b_t = tk.Button(app, image=triangle_icon, width=30, height=20, command=lambda:ap
 b_t.grid(row=13, column=9, sticky='w')
 b_d = tk.Button(app, image=decline_on_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline_on'], b_d))
 b_d.grid(row=13, column=10, sticky='w')
+b_off = tk.Button(app, text='OFF', width=3, height=1, command=lambda:app.change_envelope(None, b_off))
+b_off.grid(row=13, column=11, sticky='w')
+
 
 app.mainloop() 
