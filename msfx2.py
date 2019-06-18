@@ -215,7 +215,7 @@ class msxwaveform(object):
     def __init__(self, samplerate=22000, hex_freq=254, noise_fr = 0, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
-        self.length = length
+        self.length = (3580000/2)/(env_period*256)*3
         self.envelope = envelope
         self.envelopetype = envelopetype
         self.env_period = env_period    # 6992 or 1b50h is ~1s
@@ -268,22 +268,7 @@ class msxwaveform(object):
             self.noise = self.noise * self.volume
             #print(self.noise)
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-            # slen = 300
-            # i = 0
-            # typ = True 
-            # o = []
-            # while i < self.samples:
-            #     if typ == True:
-            #         o.append(a[i])
-            #     else:
-            #         o.append(t[i])
-            #     if i % slen == 0:
-            #         if typ == True:
-            #             typ = False 
-            #         else:
-            #             typ = True 
-            #     i += 1
-            # self.y = np.asarray(o)
+
 
         self.y = self.volume * self.y 
 
@@ -350,14 +335,7 @@ def writeheader(wavetest, file, segment):
             if app.noise[i].get() == 2:
                 channels = 2
         i += 1
-    #for b in app.enabled:
-    #    if b.get() == True:
-    #        s += 1
-    #channels = 1
-    #for b in app.noise:
-    #    if b.get() == 2:
-    #        channels = 2
-    #print(channels)
+
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
     t = 0
     if segment == 'a':
@@ -396,19 +374,20 @@ def apply_envelope(msxwav):
         
     elif msxwav.envelopetype == envelope_types['decline']:
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
-        if len(y) > 32:
-            i = 32
+        if len(y) > 32*msxwav.length:
+            i = int(32*msxwav.length)
             while i < len(y):
                 y[i] = 0
                 i += 1
-        #print(y)
+        #TODO: fix me for looping
+        print(y)
     elif msxwav.envelopetype == envelope_types['inv_triangle']:
         y = (sg.sawtooth( ((1 * np.pi * (1/env_len) * x) / 32) + np.pi, 0.5) + 1)/2 #offset by half a second?
 
     elif msxwav.envelopetype == envelope_types['decline_on']:
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / 32, 0) + 1)/2
-        if len(y) > 32:
-            i = 32
+        if len(y) > 32*msxwav.length:
+            i = int(32*msxwav.length)
             while i < len(y):
                 y[i] = 1
                 i += 1
@@ -505,6 +484,7 @@ class asm_window(tk.Tk):
 
         self.textbox.insert(tk.END, ' ; Made with MSFX2!\n')
         self.textbox.insert(tk.END, ' ;  (Remember to reset channels after the desired\n ;   number of frames have passed.)\n\n')
+        
         if self.defs.get():
             self.add_asm_text(self.dos.get(), -2, None, self.defs.get())
         
@@ -513,6 +493,7 @@ class asm_window(tk.Tk):
             self.textbox.insert(tk.END, ' ; Init PSG\n')
             self.add_asm_text(self.dos.get(), -1, None, self.defs.get()) # r#, value
             self.textbox.insert(tk.END, '\n')
+        
         # TONE/NOISE IO (r7)
         i = 0
         while i < 3:
@@ -574,10 +555,12 @@ class asm_window(tk.Tk):
             if reg == -1:
                 out = out + '   ld ix, ' +GICINI + '\n'
                 out = out + '   ld iy, [' + EXPTBL + '-1]\n'
-            out = out + '   call ' + CALSLT + '\n'
+            if reg > -1:
+                out = out + '   call ' + CALSLT + '\n'
         self.textbox.insert(tk.END, out)
         return
 
+numeric = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '.']
 
 '''actual app class'''
 class msfx_window(tk.Tk):
@@ -592,6 +575,7 @@ class msfx_window(tk.Tk):
         self.envelope = envelope_types['decline']
         self.modified = False 
         self.tw = None
+        self.envyesno = True
 
         self.wave_vals = []
         self.freq_vals_hex = []
@@ -618,8 +602,8 @@ class msfx_window(tk.Tk):
             self.tones_txt[i].grid(row=(i*3)+1, column=0, columnspan=3)
             
             self.wave_vals.append(tk.StringVar())
-            wv = self.wave_vals[i]
-            wv.trace('w', lambda name, index, mode, wv=wv: self.changefreq)
+            #wv = self.wave_vals[i]
+            #wv.trace('w', lambda name, index, mode, wv=wv: self.changefreq)
 
             self.wave_freq_entries.append(tk.Entry(self, width=4, textvariable=self.wave_vals[i]))
             self.wave_freq_entries[i].grid(row=i*3, column=4)
@@ -665,6 +649,18 @@ class msfx_window(tk.Tk):
         self.noiselbl = tk.Label(self, text='0 Hz')
         self.noiselbl.grid(row=12,column=9, columnspan=2)
 
+        tk.Label(self, text='Env. Freq:').grid(row=14)
+        self.env_freq = tk.Scale(self, orient=tk.HORIZONTAL, to=65535, resolution=1, command=self.change_env_freq)
+        self.env_freq.set(6992)
+        self.env_freq.grid(row=14,column=1,columnspan=8, sticky='ew')
+        self.env_freq_var = tk.StringVar()
+        ev = self.env_freq_var
+        self.env_freq_txt = tk.Entry(self, width=4, textvariable=self.env_freq_var)
+        ev.trace('w', lambda name, index, mode, ev=ev: self.change_env_time())
+        self.env_freq_txt.insert(0,'1.00')
+        tk.Label(self,text='sec').grid(row=14,column=10)
+        self.env_freq_txt.grid(row=14,column=9)
+        
         self.exp_asm = tk.Button(self,text='Export ASM', command=self.export_asm)
         self.exp_asm.grid(row=18,column=1,columnspan=3)
 
@@ -680,6 +676,52 @@ class msfx_window(tk.Tk):
 
         self.audio = pyaudio.PyAudio()
         self.stream = None
+
+
+    def change_env_time(self):
+        c = self.env_freq_var.get()
+        global numeric 
+        ok = False
+        i = 0
+        while i < len(c):
+            ok = False
+            for n in numeric:
+                if c[i] == n:
+                    ok = True
+            if ok == False:
+                break 
+            i += 1
+        if not ok or len(c) > 4:
+            c = c[:-1]
+            self.env_freq_txt.delete(0,tk.END)
+            self.env_freq_txt.insert(0,c)
+
+        if self.env_freq_var.get() == '':
+            return
+        try:
+            if float(self.env_freq_var.get()) == 0:
+                return
+        except:
+            return
+
+        pd = float(self.env_freq_var.get())
+        v = math.floor((3580000/2)/pd/256)
+        if v < 1:
+            v = 1
+        if v > 65535:
+            v = 65535
+        
+        self.env_freq.set(v)
+
+    def change_env_freq(self, o):
+        if int(o) == 0:
+            self.env_freq.set(1)
+            o = '1'
+        pd = round((3580000/2)/(256*int(o)),2)
+        #print(pd)
+        self.env_freq_txt.delete(0,tk.END)
+        self.env_freq_txt.insert(0,pd)
+
 
     def export_asm(self):
         if self.tw == None:
@@ -713,6 +755,14 @@ class msfx_window(tk.Tk):
 
 
     def changefreq(self, o, num, manual=False):
+        c = self.wave_freq_entries[num].get()
+        try:
+            d = int(c[len(c)-1])
+        except:
+            c = c[:-1]
+            self.wave_freq_entries[num].delete(0,tk.END)
+            self.wave_freq_entries[num].insert(0,c)
+            
         if num == 3:
             if self.wave_freq_scroll[3].get() == 0:
                 return
@@ -824,7 +874,7 @@ class msfx_window(tk.Tk):
                     wf = 'mixed' 
                     stereonoise = True
                     noisechan = i
-                w[i] = msxwaveform(hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, wf=wf, noise_fr=nf)#, envelopetype=envelope_types['inv_sawtooth'])
+                w[i] = msxwaveform(hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, env_period=self.env_freq.get(), wf=wf, noise_fr=nf)#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:

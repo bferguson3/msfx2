@@ -17,7 +17,7 @@ init:
     ld a, $0d
     ld e, %00000100 ; \| \| <invert sawtooth 
     call WRTPSG 
-    ld a, $0c 
+    ld a, $50 
     ld e, $1b       ; < frequency of 16*256
     call WRTPSG 
     xor a
