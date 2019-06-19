@@ -248,7 +248,7 @@ class msxwaveform(object):
             while i < self.samples:
                 a.append(r)
                 if i % j == 0:
-                    r = random.randrange(0,32)/32
+                    r = (random.randrange(0,32)/32) * 0.75
                 i += 1
             self.y = np.asarray(a)
         elif self.wf == 'tone':
@@ -265,10 +265,10 @@ class msxwaveform(object):
                     r = random.randrange(0,32)/32
                 i += 1
             self.noise = np.asarray(a)
-            self.noise = self.noise * self.volume
+            self.noise = self.noise * (self.volume) * 0.75
             #print(self.noise)
             self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-
+            self.volume = self.volume * 2
 
         self.y = self.volume * self.y 
 
@@ -365,7 +365,7 @@ def writeheader(wavetest, file, segment):
 def apply_envelope(msxwav):
     env_len = msxwav.env_freq # 6992
     #print(env_len)
-    x = np.arange(32*msxwav.length) #32 per second
+    x = np.arange(32*msxwav.length) #length = env period * 3
 
     global envelope_types
     # denominator is num of samples, therefore resolution of envelope
@@ -374,20 +374,19 @@ def apply_envelope(msxwav):
         
     elif msxwav.envelopetype == envelope_types['decline']:
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
-        if len(y) > 32*msxwav.length:
-            i = int(32*msxwav.length)
+        if len(y) > 32*(msxwav.length/3):
+            i = math.floor(32*(msxwav.length/3))
             while i < len(y):
                 y[i] = 0
                 i += 1
-        #TODO: fix me for looping
-        print(y)
+        
     elif msxwav.envelopetype == envelope_types['inv_triangle']:
         y = (sg.sawtooth( ((1 * np.pi * (1/env_len) * x) / 32) + np.pi, 0.5) + 1)/2 #offset by half a second?
 
     elif msxwav.envelopetype == envelope_types['decline_on']:
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / 32, 0) + 1)/2
-        if len(y) > 32*msxwav.length:
-            i = int(32*msxwav.length)
+        if len(y) > 32*(msxwav.length/3):
+            i = math.floor(32*(msxwav.length/3))
             while i < len(y):
                 y[i] = 1
                 i += 1
@@ -397,8 +396,8 @@ def apply_envelope(msxwav):
 
     elif msxwav.envelopetype == envelope_types['incline']:
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / 32, 1) + 1)/2
-        if len(y) > 32:
-            i = 32
+        if len(y) > 32*(msxwav.length/3):
+            i = math.floor(32*(msxwav.length/3))
             while i < len(y):
                 y[i] = 1
                 i += 1
@@ -408,8 +407,8 @@ def apply_envelope(msxwav):
 
     elif msxwav.envelopetype == envelope_types['incline_off']:
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / 32, 1) + 1)/2
-        if len(y) > 32:
-            i = 32
+        if len(y) > 32*(msxwav.length/3):
+            i = math.floor(32*(msxwav.length/3))
             while i < len(y):
                 y[i] = 0
                 i += 1
@@ -418,7 +417,10 @@ def apply_envelope(msxwav):
     # TODO: fix this manual amplitude adjustment for proper hardware levels.
     i = 0
     while i < len(y):
-        y[i] -= 0.33
+        #if msxwav.wf != 'noise':
+        #    y[i] -= 0.1
+        #else:
+        y[i] -= 0.25
         if y[i] < 0:
             y[i] = 0
         i += 1
@@ -755,13 +757,14 @@ class msfx_window(tk.Tk):
 
 
     def changefreq(self, o, num, manual=False):
-        c = self.wave_freq_entries[num].get()
-        try:
-            d = int(c[len(c)-1])
-        except:
-            c = c[:-1]
-            self.wave_freq_entries[num].delete(0,tk.END)
-            self.wave_freq_entries[num].insert(0,c)
+        if num < 3:
+            c = self.wave_freq_entries[num].get()
+            try:
+                d = int(c[len(c)-1])
+            except:
+                c = c[:-1]
+                self.wave_freq_entries[num].delete(0,tk.END)
+                self.wave_freq_entries[num].insert(0,c)
             
         if num == 3:
             if self.wave_freq_scroll[3].get() == 0:
