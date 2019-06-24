@@ -11,7 +11,7 @@ import math
 from scipy import signal as sg 
 import tkinter as tk 
 import wave
-import time 
+import time
 import random
 import pyaudio  # sudo apt-get install python3-pyaudio
 from threading import Thread

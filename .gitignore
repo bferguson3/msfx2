@@ -8,4 +8,5 @@
 *.sym
 *.tmp
 /dostest
-*.dsk
+*.dsk 
+/__pycache__
