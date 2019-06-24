@@ -17,6 +17,7 @@ import pyaudio  # sudo apt-get install python3-pyaudio
 from threading import Thread
 from tkinter import messagebox
 import lfsr 
+import sys 
 
 class icon_datas(object):
     def __init__(self):
@@ -470,8 +471,13 @@ class asm_window(tk.Tk):
         
         self.textbox = tk.Text(self, width=80, height=40)
         self.textbox.pack(side=tk.BOTTOM)
+
+        self.protocol("WM_DELETE_WINDOW", self._iconme)
         
         self.refresh(self.parent)
+
+    def _iconme(self):
+        self.withdraw()
 
     def cb(self, var):
         global app
@@ -497,23 +503,72 @@ class asm_window(tk.Tk):
             self.textbox.insert(tk.END, '\n')
         
         # TONE/NOISE IO (r7)
+        b = '0b10000000'
+        c = '0b00000000'
+        if wf.enabled[0].get():
+            e = wf.noise[0].get()
+            if e == 0: #tone A
+                c = '0b00000001'
+            elif e == 1: # noise A
+                c = '0b00001000'
+            elif e == 2:
+                c = '0b00001001'
+        o = int(b,2) | int(c,2)
+        if wf.enabled[1].get():
+            e = wf.noise[1].get()
+            if e == 0: # tone B
+                c = '0b00000010'
+            elif e == 1:
+                c = '0b00010000'
+            elif e == 2:
+                c = '0b00010010'
+        o = o | int(c,2)
+        if wf.enabled[2].get():
+            e = wf.noise[2].get()
+            if e == 0:
+                c = '0b00000100'
+            elif e == 1:
+                c = '0b00100000'
+            elif e == 2:
+                c = '0b00100100'
+        o = o | int(c,2)
+        #print(format(o,'08b'))
+        self.textbox.insert(tk.END, ' ; Tone/Noise IO\n')
+        self.add_asm_text(self.dos.get(), 7, o, self.defs.get())
+        self.textbox.insert(tk.END, '\n')
+        # VOL / ENVELOPE - optional if envelope = False (r8, r9, ra)
+        if (wf.envyesno == False and self.vol.get()) or wf.envyesno == True:
+            # 8 = A, 9 = B, A = C. 
+            # if no envelope, 0000+4bit vol level
+            # if yes envelope, 0001+xxxx
+            print('todo')
+
+        # TONE FREQ (r0-5) (if wf 0 or 2)
         i = 0
         while i < 3:
             if wf.enabled[i].get():
-                self.textbox.insert(tk.END, ' ; Channel ' + str(i+1) + ' tone\n')
-                self.add_asm_text(self.dos.get(), (i*2), wf.wave_freq_scroll[i].get(), self.defs.get())
-                self.textbox.insert(tk.END, '\n')
+                if wf.noise[i].get() == 0 or wf.noise[i].get() == 2:
+                    self.textbox.insert(tk.END, ' ; Channel ' + str(i+1) + ' tone\n')
+                    self.add_asm_text(self.dos.get(), (i*2), wf.wave_freq_scroll[i].get(), self.defs.get())
+                    self.textbox.insert(tk.END, '\n')
             i += 1
-        # VOL / ENVELOPE - optional if envelope = False (r8, r9, ra)
-        
-        # TONE FREQ (r0-5) (if wf 0 or 2)
-
         # NOISE FREQ (r6) (if wf 1 or 2)
-
+        i = 0
+        nz = False
+        while i < 3:
+            if wf.noise[i].get() == 1 or wf.noise[i].get() == 2:
+                nz = True
+            i += 1
+        if nz:
+            self.textbox.insert(tk.END, ' ; Noise frequency\n')
+            self.add_asm_text(self.dos.get(), 6, wf.wave_freq_scroll[3].get(), self.defs.get())
+            self.textbox.insert(tk.END, '\n')
         # ENVELOPE FREQ (if env=true) (rb, rc)
-
+        if wf.envyesno == True:
+            print('env freq')
         # ENVELOPE SHAPE (if env=true) (rd)
-
+        if wf.envyesno == True:
+            print('env shape')
         
         self.textbox.insert(tk.END,'')
         return
@@ -540,16 +595,23 @@ class asm_window(tk.Tk):
             out = out + 'WRTPSG: equ $0093\n'
             out = out + '\n'
 
-        #print(dos, reg, val)
+        # if more than one byte...
+        if reg == 0 or reg == 2 or reg == 4:
+            v2 = str(math.floor(val/256))
+            v1 = str(val % 256)
+        elif reg == 7:
+            v1 = '%' + format(val, '08b')
+        else:
+            v1 = str(val)
 
         if dos == False:
             if reg > -1:
                 out = out + '   ld a, ' + str(reg) + '\n'
-                out = out + '   ld e, ' + str(val) + '\n'
+                out = out + '   ld e, ' + v1 + '\n'
                 out = out + '   call ' + WRTPSG + '\n'
                 if reg == 0 or reg == 2 or reg == 4:
                     out = out + '   ld a, ' + str(reg+1) + '\n'
-                    out = out + '   ld e, ' + str(val) + '\n'
+                    out = out + '   ld e, ' + v2 + '\n'
                     out = out + '   call ' + WRTPSG + '\n'
             elif reg == -1:
                 out = out + '   call ' + GICINI + '\n'
@@ -557,8 +619,19 @@ class asm_window(tk.Tk):
             if reg == -1:
                 out = out + '   ld ix, ' +GICINI + '\n'
                 out = out + '   ld iy, [' + EXPTBL + '-1]\n'
-            if reg > -1:
                 out = out + '   call ' + CALSLT + '\n'
+            if reg > -1:
+                out = out + '   ld a, ' + str(reg) + '\n'
+                out = out + '   ld e, ' + v1 + '\n'
+                out = out + '   ld ix, ' + WRTPSG + '\n'
+                out = out + '   ld iy, [' + EXPTBL + '-1]\n'
+                out = out + '   call ' + CALSLT + '\n'
+                if reg == 0 or reg == 2 or reg == 4:
+                    out = out + '   ld a, ' + str(reg+1) + '\n'
+                    out = out + '   ld e, ' + v2 + '\n'
+                    out = out + '   ld ix, ' + WRTPSG + '\n'
+                    out = out + '   ld iy, [' + EXPTBL + '-1]\n'
+                    out = out + '   call ' + CALSLT + '\n'
         self.textbox.insert(tk.END, out)
         return
 
@@ -679,6 +752,11 @@ class msfx_window(tk.Tk):
         self.audio = pyaudio.PyAudio()
         self.stream = None
 
+        self.protocol("WM_DELETE_WINDOW", self.quit)
+    
+    def quit(self):
+        print('quitting')
+        sys.exit()
 
     def change_env_time(self):
         c = self.env_freq_var.get()
@@ -729,6 +807,7 @@ class msfx_window(tk.Tk):
         if self.tw == None:
             self.tw = asm_window(self)
         else:
+            self.tw.deiconify()
             self.tw.refresh(self)
             self.tw.lift()
         return
