@@ -234,7 +234,10 @@ class msxwaveform(object):
 
         self.samples = self.length * self.samplerate
 
-        self.volume = math.floor(60 * (vol/15))   # max value of simulated envelope
+        if self.envelope == True:
+            self.volume = 60
+        else:
+            self.volume = math.floor(60 * (vol/15))   # max value of simulated envelope
 
         self.env_freq = (3580000/2) / (256*self.env_period) 
 
@@ -459,6 +462,8 @@ class asm_window(tk.Tk):
 
         self.bframe = tk.Frame(self)
         self.bframe.pack(side=tk.TOP)
+        self.copy_btn = tk.Button(self.bframe, text='Copy All', command=self.copyall, anchor='w')
+        self.copy_btn.pack(side=tk.LEFT, padx=30)
         self.cb_lbls = tk.Checkbutton(self.bframe, text='Add defs', command=lambda:self.cb(self.defs))
         self.cb_lbls.pack(side=tk.LEFT)
         self.cb_dos = tk.Checkbutton(self.bframe, text='Interslot', command=lambda:self.cb(self.dos))
@@ -468,13 +473,21 @@ class asm_window(tk.Tk):
         self.cb_vol = tk.Checkbutton(self.bframe, text='Volume', command=lambda:self.cb(self.vol))
         self.cb_vol.pack(side=tk.LEFT)# this is only enabled if envelope is false
         
-        
         self.textbox = tk.Text(self, width=80, height=40)
         self.textbox.pack(side=tk.BOTTOM)
 
         self.protocol("WM_DELETE_WINDOW", self._iconme)
         
         self.refresh(self.parent)
+
+    def copyall(self):
+        self.clipboard_clear()
+        #print(self.textbox.get(1.0,tk.END))
+        self.clipboard_append(self.textbox.get(1.0, tk.END))
+        self.update()
+        messagebox.showinfo('OK!','All text copied\nto clipboard.')
+        
+        return
 
     def _iconme(self):
         self.withdraw()
@@ -488,6 +501,7 @@ class asm_window(tk.Tk):
         self.refresh(app)
 
     def refresh(self, wf):
+        self.textbox.config(state=tk.NORMAL)
         self.textbox.delete(1.0, tk.END)
 
         if wf.enabled[0].get() == 0 and wf.enabled[1].get() == 0 and wf.enabled[2].get() == 0:
@@ -590,6 +604,8 @@ class asm_window(tk.Tk):
             self.textbox.insert(tk.END, '\n')
 
         self.textbox.insert(tk.END,'')
+
+        self.textbox.config(state=tk.DISABLED)
         return
     
     def add_asm_text(self, dos, reg, val, defs):
@@ -670,6 +686,7 @@ class msfx_window(tk.Tk):
         self.modified = False 
         self.tw = None
         self.envyesno = True
+        self.generated = False
 
         self.wave_vals = []
         self.freq_vals_hex = []
@@ -717,9 +734,9 @@ class msfx_window(tk.Tk):
             tk.Radiobutton(self, variable=self.noise[i], value=1, command=self.enabled_cb).grid(row=(i*3)+2, column=9)
             tk.Radiobutton(self, variable=self.noise[i], value=2, command=self.enabled_cb).grid(row=(i*3)+2, column=10)
 
-            self.vol_lvl.append(tk.Scale(self, orient=tk.VERTICAL, from_=15, to=0, resolution=1))
+            self.vol_lvl.append(tk.Scale(self, orient=tk.VERTICAL, from_=15, to=0, resolution=1, command=self.enabled_cb))
             self.vol_lvl[i].set(15)
-            self.vol_lvl[i].grid(row=(i*3), rowspan=3, column=20, sticky='ns')
+            self.vol_lvl[i].grid(row=(i*3), rowspan=3, column=11, sticky='ns')
 
             i += 1
         
@@ -760,17 +777,17 @@ class msfx_window(tk.Tk):
         tk.Label(self,text='sec').grid(row=14,column=10)
         self.env_freq_txt.grid(row=14,column=9)
         
-        self.exp_asm = tk.Button(self,text='Export ASM', command=self.export_asm)
-        self.exp_asm.grid(row=18,column=1,columnspan=3)
+        self.exp_asm = tk.Button(self,text='View ASM', command=self.export_asm)
+        self.exp_asm.grid(row=18,column=0,columnspan=3)
 
         self.gen_wv = tk.Button(self, text='Generate wave', command=self.makefile)
         #self.mft = False
         #self.gen_wv = tk.Label(self, text='')
         self.gen_wv.grid(row=18, column=3, columnspan=6)
-        self.playbutton = tk.Button(self, text='Play', command=self.playthread)
-        self.playbutton.grid(row=18, column=8, columnspan=2)
+        self.playbutton = tk.Button(self, text='▶', command=self.playthread)
+        self.playbutton.grid(row=18, column=9, columnspan=2)
 
-        self.stopbutton = tk.Button(self, text='Stop', command=self.stopplay)
+        self.stopbutton = tk.Button(self, text='■', command=self.stopplay)
         self.stopbutton.grid(row=18,column=10,columnspan=2)
 
         self.audio = pyaudio.PyAudio()
@@ -837,7 +854,7 @@ class msfx_window(tk.Tk):
             self.tw.lift()
         return
 
-    def enabled_cb(self):
+    def enabled_cb(self, o=None):
         self.set_modified(True)
         self.loop = False
 
@@ -942,8 +959,16 @@ class msfx_window(tk.Tk):
         if env != None:
             self.envelope = env
             self.envyesno = True
+            i = 0
+            while i < 3:
+                self.vol_lvl[i].config(state=tk.DISABLED, background='#eee', foreground='#eee')
+                i += 1
         else:
             self.envyesno = False
+            i = 0
+            while i < 3:
+                self.vol_lvl[i].config(state=tk.NORMAL, background='#ddd', foreground='#000')
+                i += 1
         btn.config(relief=tk.SUNKEN)
         self.set_modified(True)
     
@@ -989,7 +1014,8 @@ class msfx_window(tk.Tk):
                 s += 1
             i += 1
         if s == 0:
-            print('enable at least one channel!')
+            #print('enable at least one channel!')
+            messagebox.showinfo('Oops!', 'Enable at least\none channel!')
             return
         try:
             f = open('a.wav', 'wb')
@@ -1069,13 +1095,15 @@ class msfx_window(tk.Tk):
             f.write(bytes([0x80]))
             if(f):
                 f.close()
-            print('.wav written successfully!')
+            #print('.wav written successfully!')
+            messagebox.showinfo('OK!', '.WAV written successfully!')
         #except:
         #    print('something went wrong.')
         except PermissionError:
             print("still open!")
 
         self.mft = False
+        self.playbutton.config(state=tk.NORMAL)
         self.set_modified(False)
 
     def playthread(self):
@@ -1157,5 +1185,7 @@ b_d.grid(row=13, column=10, sticky='w')
 b_off = tk.Button(app, text='OFF', width=3, height=1, command=lambda:app.change_envelope(None, b_off))
 b_off.grid(row=13, column=11, sticky='w')
 
+app.change_envelope(envelope_types['decline'], b_do)
+app.playbutton.config(state=tk.DISABLED)
 
 app.mainloop() 
