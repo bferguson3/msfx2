@@ -213,7 +213,7 @@ tone_frequencies = {
 
 '''specific waveform type to msx'''
 class msxwaveform(object):
-    def __init__(self, samplerate=22000, hex_freq=254, noise_fr = 0, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992, vol=15):
+    def __init__(self, samplerate=44000, hex_freq=254, noise_fr = 0, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992, vol=15):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
         self.length = (3580000/2)/(env_period*256)*3
@@ -249,7 +249,7 @@ class msxwaveform(object):
             while i < self.samples:
                 a.append(r)
                 if i % j == 0:
-                    r = (random.randrange(0,32)/32) * 0.75
+                    r = (random.randrange(0,32)/32)
                 i += 1
             self.y = np.asarray(a)
         elif self.wf == 'tone':
@@ -957,6 +957,7 @@ class msfx_window(tk.Tk):
     #        self.mft = True
 
     def makefile(self):
+        self.stopplay()
         w = []
         s = 0
         i = 0
@@ -982,7 +983,9 @@ class msfx_window(tk.Tk):
                     wf = 'mixed' 
                     stereonoise = True
                     noisechan = i
-                w[i] = msxwaveform(hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, env_period=self.env_freq.get(), wf=wf, noise_fr=nf, vol=self.vol_lvl[i].get())#, envelopetype=envelope_types['inv_sawtooth'])
+                sr = (3580000/2)/(self.env_freq.get()*256)
+                sr = min(math.floor(44000/sr), 44000)
+                w[i] = msxwaveform(samplerate=sr, hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, env_period=self.env_freq.get(), wf=wf, noise_fr=nf, vol=self.vol_lvl[i].get())#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
             i += 1
         if s == 0:
