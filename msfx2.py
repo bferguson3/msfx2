@@ -16,6 +16,7 @@ import random
 import pyaudio  # sudo apt-get install python3-pyaudio
 from threading import Thread
 from tkinter import messagebox
+from tkinter import filedialog
 import lfsr 
 import sys 
 
@@ -940,7 +941,7 @@ class msfx_window(tk.Tk):
             else:
                 self.tones_txt[num].config(text='Tone: <>')
 
-    def change_envelope(self, env, btn):
+    def change_envelope(self, env, btn=None):
         global b_do
         global b_io 
         global b_is 
@@ -950,6 +951,7 @@ class msfx_window(tk.Tk):
         global b_t 
         global b_d
         global b_off
+        global envelope_types
         b_do.config(relief=tk.RAISED)
         b_io.config(relief=tk.RAISED)
         b_is.config(relief=tk.RAISED)
@@ -964,25 +966,22 @@ class msfx_window(tk.Tk):
             self.envyesno = True
             i = 0
             while i < 3:
-                self.vol_lvl[i].config(state=tk.DISABLED, background='#eee', foreground='#eee')
+                self.vol_lvl[i].grid_forget()#config(state=tk.DISABLED, background='#eee', foreground='#eee')
                 i += 1
         else:
             self.envyesno = False
             i = 0
             while i < 3:
-                self.vol_lvl[i].config(state=tk.NORMAL, background='#ddd', foreground='#000')
+                self.vol_lvl[i].grid(row=(i*3), rowspan=3, column=11, sticky='ns')
                 i += 1
         btn.config(relief=tk.SUNKEN)
+        if btn == None:
+            if env == envelope_types['']:
+                b_do.config(relief=tk.SUNKEN)
+            elif env == envelope_types[1]:
+                b_io.config(relief=tk.SUNKEN)
         self.set_modified(True)
     
-
-    #def makefile_thread(self):
-        #self.playbutton.config(state=tk.DISABLED)
-        #self.loop = True
-    #    if self.mft == False:
-    #        t = Thread(target=self.makefile, daemon=True)
-    #        t.start()
-    #        self.mft = True
 
     def makefile(self):
         self.stopplay()
@@ -1156,8 +1155,6 @@ class msfx_window(tk.Tk):
         print('reset')
         i = 0
         while i < 3:
-            #self.wave_freq_entries[i].delete(0, tk.END)#set('')
-            #self.wave_freq_entries[i].insert(0, '')
             self.wave_freq_scroll[i].set(0)
             self.enabled_boxes[i].deselect()
             self.enabled[i].set(False)# = False 
@@ -1175,25 +1172,80 @@ class msfx_window(tk.Tk):
         app.playbutton.config(state=tk.DISABLED)
     
     def load_sfx(self):
-        print('load')
+        #print('load')
+        sfxfilename = tk.filedialog.askopenfilename(title='Load SFX file', filetypes=(('MSFX sfx file', '*.sfx'), ('MSFX sfx file', '*.SFX'), ('All files', '*.*')))
+        if sfxfilename == '' or type(sfxfilename) == tuple:
+            return 
+        f = None 
+        inlines = []
+        try:
+            l = ' '
+            f = open(sfxfilename, 'r')
+            while l != '':
+                inlines.append(l)
+                l = f.readline()
+                l = l[:-1]
+            inlines.pop(0)
+            # now reset!
+            i = 0
+            while i < 3:
+                self.wave_freq_scroll[i].set(inlines.pop(0))
+                self.enabled[i].set(inlines.pop(0))
+                self.noise[i].set(inlines.pop(0))
+                self.vol_lvl[i].set(inlines.pop(0))
+                i += 1
+            self.wave_freq_scroll[3].set(inlines.pop(0))
+            self.envelope = inlines.pop(0)
+            self.env_freq.set(inlines.pop(0))
+            print(inlines)
+        finally:
+            f.close()
 
     def save_as(self):
-        print('save')
+        #global sfxfilename
+        sfxfilename = tk.filedialog.asksaveasfilename(title='Save as SFX file', filetypes=(('MSFX .sfx file', '*.sfx'), ('MSFX sfx file', '*.SFX'), ('All files', '*.*')))
+        if sfxfilename == '' or type(sfxfilename) == tuple:
+            return 
+        if sfxfilename[-4:].upper() != '.SFX':
+            sfxfilename = sfxfilename + '.sfx'
+        # now save
+        f = None 
+        out = []
+        try: 
+            f = open(sfxfilename, 'w')
+            i = 0
+            while i < 3:
+                out.append(self.wave_freq_scroll[i].get())
+                out.append(self.enabled[i].get())
+                out.append(self.noise[i].get())
+                out.append(self.vol_lvl[i].get())
+                i += 1
+            out.append(self.wave_freq_scroll[3].get())
+            out.append(self.envelope)
+            out.append(self.env_freq.get())
+            for c in out:
+                f.write(str(c))
+                f.write('\n')
+            messagebox.showinfo("OK!", 'File saved!')
+        #except:
+        #    print('oops')
+        finally:
+            f.close()
+        #print(out)
+        
 
     def copy_asm(self):
         self.export_asm()
-        self.tw.copyall()#show_conf=False)
-        #self.tw.withdraw()
-        #messagebox.showinfo('OK!', 'z80 assembly copied\nto the clipboard!')
+        self.tw.copyall()
 
     def show_about(self):
-        print('help')
+        messagebox.showinfo('About', 'MSFX2 v1.0\nMade by Ben Ferguson\nUsing Python 3!\n\nhttps://github.com/bferguson3/msfx2/')
  
             
-#### end def for msfx_window
-
+# define app
 app = msfx_window() 
 
+# define icons
 icons = icon_datas()
 inv_sawtooth_icon = tk.BitmapImage(data=icons.inv_sawtooth_data)
 decline_off_icon = tk.BitmapImage(data=icons.decline_off_data)
@@ -1204,7 +1256,7 @@ incline_on_icon = tk.BitmapImage(data=icons.incline_on_data)
 triangle_icon = tk.BitmapImage(data=icons.triangle_data)
 decline_on_icon = tk.BitmapImage(data=icons.decline_on_data)
 tk.Label(app, text='Vol envelope:').grid(row=13, column=0)
-
+# define envelope buttons
 b_do = tk.Button(app, image=decline_off_icon, width=30, height=20, command=lambda:app.change_envelope(envelope_types['decline'], b_do))
 b_do.grid(row=13, column=3)
 b_do.config(relief=tk.SUNKEN)
@@ -1225,9 +1277,11 @@ b_d.grid(row=13, column=10, sticky='w')
 b_off = tk.Button(app, text='OFF', width=3, height=1, command=lambda:app.change_envelope(None, b_off))
 b_off.grid(row=13, column=11, sticky='w')
 
+# init state
 app.change_envelope(envelope_types['decline'], b_do)
 app.playbutton.config(state=tk.DISABLED)
 
+# menu definition
 menuBar = tk.Menu(app)
 fileMenu = tk.Menu(menuBar, tearoff=0)
 fileMenu.add_command(label='Reset', command=app.reset)
@@ -1242,12 +1296,6 @@ helpMenu = tk.Menu(menuBar, tearoff=0)
 helpMenu.add_command(label='About', command=app.show_about)
 menuBar.add_cascade(label='Help', menu=helpMenu)
 app.config(menu=menuBar)
-# reset
-# open 
-# save as 
-#-
-# copy asm to clipboard
-#-
-#quit
 
+# start app
 app.mainloop() 
