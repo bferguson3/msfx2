@@ -480,12 +480,13 @@ class asm_window(tk.Tk):
         
         self.refresh(self.parent)
 
-    def copyall(self):
+    def copyall(self, show_conf=True):
         self.clipboard_clear()
         #print(self.textbox.get(1.0,tk.END))
         self.clipboard_append(self.textbox.get(1.0, tk.END))
         self.update()
-        messagebox.showinfo('OK!','All text copied\nto clipboard.')
+        if show_conf:
+            messagebox.showinfo('OK!','All text copied\nto clipboard.')
         
         return
 
@@ -696,6 +697,7 @@ class msfx_window(tk.Tk):
         self.noise = []
         self.tones_txt = []
         self.vol_lvl = []
+        self.enabled_boxes = []
 
         i = 0
         while i < 3:
@@ -727,7 +729,8 @@ class msfx_window(tk.Tk):
             tk.Label(self, text='Music/Noise/Mix?').grid(row=(i*3)+1, column=8, columnspan=3)
             
             self.enabled.append(tk.BooleanVar())
-            tk.Checkbutton(self, variable=self.enabled[i], command=self.enabled_cb).grid(row=(i*3)+2, column=7)
+            self.enabled_boxes.append(tk.Checkbutton(self, variable=self.enabled[i], command=self.enabled_cb))
+            self.enabled_boxes[i].grid(row=(i*3)+2, column=7)
             
             self.noise.append(tk.IntVar())
             tk.Radiobutton(self, variable=self.noise[i], value = 0, command=self.enabled_cb).grid(row=(i*3)+2, column=8)
@@ -1148,6 +1151,43 @@ class msfx_window(tk.Tk):
         #print(in_data, frame_count, time_info)
         data = self.wf.readframes(frame_count)
         return (data, pyaudio.paContinue)
+
+    def reset(self):
+        print('reset')
+        i = 0
+        while i < 3:
+            #self.wave_freq_entries[i].delete(0, tk.END)#set('')
+            #self.wave_freq_entries[i].insert(0, '')
+            self.wave_freq_scroll[i].set(0)
+            self.enabled_boxes[i].deselect()
+            self.enabled[i].set(False)# = False 
+            self.noise[i].set(0)# = 0
+            self.vol_lvl[i].set(15)
+            i += 1
+        self.wave_freq_scroll[3].set(0)
+        self.noiselbl.config(text='0 Hz')
+        self.env_freq_var.set(1.0)
+        if self.tw:
+            self.tw.textbox.config(state=tk.NORMAL)
+            self.tw.textbox.delete(1.0, tk.END)
+            self.tw.withdraw()
+        app.change_envelope(envelope_types['decline'], b_do)
+        app.playbutton.config(state=tk.DISABLED)
+    
+    def load_sfx(self):
+        print('load')
+
+    def save_as(self):
+        print('save')
+
+    def copy_asm(self):
+        self.export_asm()
+        self.tw.copyall()#show_conf=False)
+        #self.tw.withdraw()
+        #messagebox.showinfo('OK!', 'z80 assembly copied\nto the clipboard!')
+
+    def show_about(self):
+        print('help')
  
             
 #### end def for msfx_window
@@ -1187,5 +1227,27 @@ b_off.grid(row=13, column=11, sticky='w')
 
 app.change_envelope(envelope_types['decline'], b_do)
 app.playbutton.config(state=tk.DISABLED)
+
+menuBar = tk.Menu(app)
+fileMenu = tk.Menu(menuBar, tearoff=0)
+fileMenu.add_command(label='Reset', command=app.reset)
+fileMenu.add_command(label='Open...', command=app.load_sfx)
+fileMenu.add_command(label='Save As...', command=app.save_as)
+fileMenu.add_separator()
+fileMenu.add_command(label='Copy ASM', command=app.copy_asm)
+fileMenu.add_separator()
+fileMenu.add_command(label='Quit', command=app.quit)
+menuBar.add_cascade(label='File', menu=fileMenu)
+helpMenu = tk.Menu(menuBar, tearoff=0)
+helpMenu.add_command(label='About', command=app.show_about)
+menuBar.add_cascade(label='Help', menu=helpMenu)
+app.config(menu=menuBar)
+# reset
+# open 
+# save as 
+#-
+# copy asm to clipboard
+#-
+#quit
 
 app.mainloop() 
