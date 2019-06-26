@@ -217,7 +217,7 @@ class msxwaveform(object):
     def __init__(self, samplerate=44000, hex_freq=254, noise_fr = 0, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992, vol=15):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
-        self.length = (3580000/2)/(env_period*256)*3
+        self.length = (1/((3580000/2)/(env_period*256)))*3
         self.envelope = envelope
         self.envelopetype = envelopetype
         self.env_period = env_period    # 6992 or 1b50h is ~1s
@@ -240,7 +240,7 @@ class msxwaveform(object):
         else:
             self.volume = math.floor(60 * (vol/15))   # max value of simulated envelope
 
-        self.env_freq = (3580000/2) / (256*self.env_period) 
+        self.env_freq = 1 / ((3580000/2) / (256*self.env_period)) 
 
         self.x = np.arange(self.samples)
 
@@ -269,11 +269,19 @@ class msxwaveform(object):
                 if i % j == 0:
                     r = random.randrange(0,32)/32
                 i += 1
-            self.noise = np.asarray(a)
-            self.noise = self.noise * (self.volume) * 0.75
+            #self.noise = np.asarray(a)
+            #self.noise = self.noise * (self.volume) * 0.75
             #print(self.noise)
-            self.y = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
-            self.volume = self.volume * 2
+            t = sg.square(2*np.pi*self.freq*self.x/self.samplerate) # actual wave generation
+            i = 0
+            o = []
+            while i < self.samples:
+                o.append(a[i])
+                i += 1
+                o.append(t[i])
+                i += 1
+            self.y = np.asarray(o)
+            #self.volume = self.volume * 2
 
         self.y = self.volume * self.y 
 
@@ -337,8 +345,8 @@ def writeheader(wavetest, file, segment):
     while i < 3:
         if app.enabled[i].get() == True:
             s += 1
-            if app.noise[i].get() == 2:
-                channels = 2
+            #if app.noise[i].get() == 2:
+            #    channels = 2
         i += 1
 
     file.write(bytes([0x52, 0x49, 0x46, 0x46])) # RIFF)
@@ -353,10 +361,11 @@ def writeheader(wavetest, file, segment):
     file.write(bytes([0x66, 0x6d, 0x74, 0x20])) # 'fmt '
     file.write(bytes([0x10, 0x00, 0x00, 0x00])) # pcm (lend)
     file.write(bytes([0x01, 0x00])) # pcm (lend)
-    if channels == 2:
-        c = 0x02 
-    else:
-        c = 0x01
+    #if channels == 2:
+    #    c = 0x02 
+    #else:
+    #    c = 0x01
+    c = 0x01
     file.write(bytes([c, 0x00])) # mono (lend)
     file.write(bytes(ToByteArr(wavetest.samplerate*s, 4, endian=0)))## 22050 (lend) = $22 56, or $44 ac for 44100
     file.write(bytes(ToByteArr(wavetest.samplerate*2*channels, 4, endian=0))) # byterate (lend) <- bitrate / 8 = 22050. if 8bit simply size of samples again.de
@@ -435,12 +444,12 @@ def apply_envelope(msxwav):
     perstep = math.ceil(msxwav.samplerate / (32))
     for c in msxwav.y:
         c = c * y[j]
-        if msxwav.wf == 'mixed':
+        #if msxwav.wf == 'mixed':
             #print(msxwav.noise[i])
-            n = msxwav.noise[i] * y[j]
+        #    n = msxwav.noise[i] * y[j]
         msxwav.y[i] = int(c)
-        if msxwav.wf == 'mixed':
-            msxwav.noise[i] = int(n)
+        #if msxwav.wf == 'mixed':
+        #    msxwav.noise[i] = int(n)
         i += 1
         if i % perstep == 0:
             j += 1
@@ -830,7 +839,8 @@ class msfx_window(tk.Tk):
             return
 
         pd = float(self.env_freq_var.get())
-        v = math.floor((3580000/2)/pd/256)
+        v = math.floor(((3580000/2)*pd)/256)
+
         if v < 1:
             v = 1
         if v > 65535:
@@ -843,7 +853,7 @@ class msfx_window(tk.Tk):
         if int(o) == 0:
             self.env_freq.set(1)
             o = '1'
-        pd = round((3580000/2)/(256*int(o)),2)
+        pd = round(1/((3580000/2)/(256*int(o))),2)
         #print(pd)
         self.env_freq_txt.delete(0,tk.END)
         self.env_freq_txt.insert(0,pd)
@@ -1008,9 +1018,9 @@ class msfx_window(tk.Tk):
                     wf = 'noise'
                 elif self.noise[i].get() == 2:
                     wf = 'mixed' 
-                    stereonoise = True
-                    noisechan = i
-                sr = (3580000/2)/(self.env_freq.get()*256)
+                    #stereonoise = True
+                    #noisechan = i
+                sr = 1/((3580000/2)/(self.env_freq.get()*256))
                 sr = min(math.floor(44000/sr), 44000)
                 w[i] = msxwaveform(samplerate=sr, hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, env_period=self.env_freq.get(), wf=wf, noise_fr=nf, vol=self.vol_lvl[i].get())#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1
@@ -1037,26 +1047,26 @@ class msfx_window(tk.Tk):
                     b = int(w[0].y[i])
                     b += 127          
                     f.write(bytes([b]))
-                    if stereonoise:
-                        b = int(w[noisechan].noise[i])
-                        b += 127
-                        f.write(bytes([b]))
+                    #if stereonoise:
+                    #    b = int(w[noisechan].noise[i])
+                    #    b += 127
+                    #    f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
                     c += 127
                     f.write(bytes([c]))
-                    if stereonoise:
-                        b = int(w[noisechan].noise[i])
-                        b += 127
-                        f.write(bytes([b]))
+                    #if stereonoise:
+                    #    b = int(w[noisechan].noise[i])
+                    #    b += 127
+                    #    f.write(bytes([b]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
                     d += 127
                     f.write(bytes([d]))
-                    if stereonoise:
-                        b = int(w[noisechan].noise[i])
-                        b += 127
-                        f.write(bytes([b]))
+                    #if stereonoise:
+                    #    b = int(w[noisechan].noise[i])
+                    #    b += 127
+                    #    f.write(bytes([b]))
                 i += 1
             f.write(bytes([0x80]))
             if (f):
@@ -1073,26 +1083,26 @@ class msfx_window(tk.Tk):
                     b = int(w[0].y[i])
                     b += 127
                     f.write(bytes([b]))
-                    if stereonoise:
-                        b = int(w[noisechan].noise[i])
-                        b += 127
-                        f.write(bytes([b]))
+                    #if stereonoise:
+                    #    b = int(w[noisechan].noise[i])
+                    #    b += 127
+                    #    f.write(bytes([b]))
                 if self.enabled[1].get() == True:
                     c = int(w[1].y[i])
                     c += 127
                     f.write(bytes([c]))
-                    if stereonoise:
-                        b = int(w[noisechan].noise[i])
-                        b += 127
-                        f.write(bytes([b]))
+                    #if stereonoise:
+                    #    b = int(w[noisechan].noise[i])
+                    #    b += 127
+                    #    f.write(bytes([b]))
                 if self.enabled[2].get() == True:
                     d = int(w[2].y[i])
                     d += 127
                     f.write(bytes([d]))
-                    if stereonoise:
-                        b = int(w[noisechan].noise[i])
-                        b += 127
-                        f.write(bytes([b]))
+                    #if stereonoise:
+                    #    b = int(w[noisechan].noise[i])
+                    #    b += 127
+                    #    f.write(bytes([b]))
                 i += 1
             f.write(bytes([0x80]))
             if(f):
