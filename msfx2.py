@@ -91,7 +91,13 @@ envelope_types = {
     'triangle': '0b1110',# sg.sawtooth(1 * np.pi * freq * x / sampling_rate, 0.5)),
     'incline_off': '0b1111'#, min(1,x)), #then set to 0
 }
-
+                    #0   1    2     3     4     5     6    7    8    9     10   11    12
+envelope_data = { 
+            'decline' : [ 0, 1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1, 0.09, 0.09,
+                    0.08, 0.08, 0.07, 0.07, 0.06, 0.06, 0.05, 0.05, 0.04, 0.04, 0.03, 0.03, 0.02,
+                    0.02, 0.01, 0.01, 0.0, 0.0, 0.0, 0.00 ]
+            }
+                     #25   26    27   28    29    30    31    32
 tone_frequencies = {
     'C  (0)': 16,
     'C# (0)': 17,
@@ -387,12 +393,17 @@ def apply_envelope(msxwav):
         y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
         
     elif msxwav.envelopetype == envelope_types['decline']:
-        y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
-        if len(y) > 32*(msxwav.length/3):
-            i = math.floor(32*(msxwav.length/3))
-            while i < len(y):
-                y[i] = 0
-                i += 1
+        #y = (sg.sawtooth(2 * np.pi * (1/env_len) * x / (32), 0)+1)/2
+        y = envelope_data['decline']
+        i = 0
+        while i < 64:
+            y.append(0)
+            i += 1
+        #if len(y) > 32*(msxwav.length/3):
+        #    i = math.floor(32*(msxwav.length/3))
+        #    while i < len(y):
+        #        y[i] = 0
+        #        i += 1
         
     elif msxwav.envelopetype == envelope_types['inv_triangle']:
         y = (sg.sawtooth( ((1 * np.pi * (1/env_len) * x) / 32) + np.pi, 0.5) + 1)/2 #offset by half a second?
@@ -429,19 +440,19 @@ def apply_envelope(msxwav):
     # end envelope pattern definitions
     
     # TODO: fix this manual amplitude adjustment for proper hardware levels.
-    i = 0
-    while i < len(y):
+    #i = 0
+    #while i < len(y):
         #if msxwav.wf != 'noise':
         #    y[i] -= 0.1
         #else:
-        y[i] -= 0.25
-        if y[i] < 0:
-            y[i] = 0
-        i += 1
+    #    y[i] -= 0.25
+    #    if y[i] < 0:
+    #        y[i] = 0
+    #    i += 1
 
     i = 0
     j = 0
-    perstep = math.ceil(msxwav.samplerate / (32))
+    perstep = math.ceil(msxwav.samplerate / (32/(msxwav.length/3)))
     for c in msxwav.y:
         c = c * y[j]
         #if msxwav.wf == 'mixed':
