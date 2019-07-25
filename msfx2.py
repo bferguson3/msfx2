@@ -217,7 +217,7 @@ class msxwaveform(object):
     def __init__(self, samplerate=44000, hex_freq=254, noise_fr = 0, length=3, wf='tone', envelope = False, envelopetype=envelope_types['decline'], env_period = 6992, vol=15):
         self.samplerate = samplerate 
         self.hex_freq = hex_freq #254 ~= 440 A(4)
-        self.length = (3580000/2)/(env_period*256)*3
+        self.length = (1/((3580000/2)/(env_period*256)))*3
         self.envelope = envelope
         self.envelopetype = envelopetype
         self.env_period = env_period    # 6992 or 1b50h is ~1s
@@ -240,7 +240,7 @@ class msxwaveform(object):
         else:
             self.volume = math.floor(60 * (vol/15))   # max value of simulated envelope
 
-        self.env_freq = (3580000/2) / (256*self.env_period) 
+        self.env_freq = 1/((3580000/2) / (256*self.env_period)) 
 
         self.x = np.arange(self.samples)
 
@@ -425,7 +425,7 @@ def apply_envelope(msxwav):
         #if msxwav.wf != 'noise':
         #    y[i] -= 0.1
         #else:
-        y[i] -= 0.25
+        y[i] -= 0.33
         if y[i] < 0:
             y[i] = 0
         i += 1
@@ -523,38 +523,54 @@ class asm_window(tk.Tk):
             self.textbox.insert(tk.END, '\n')
         
         # TONE/NOISE IO (r7)
+
         b = '0b10000000'
         c = '0b00000000'
         if wf.enabled[0].get():
             e = wf.noise[0].get()
             if e == 0: #tone A
-                c = '0b00000001'
+                c = '0b00111110'
             elif e == 1: # noise A
-                c = '0b00001000'
+                c = '0b00110111'
             elif e == 2:
-                c = '0b00001001'
-        o = int(b,2) | int(c,2)
+                c = '0b00110110'
+        else:
+            c = '0b00111111'
+        o = format(int(b,2) ^ int(c,2), '08b')
+        #print(format(o,'08b'))
+        #return
         if wf.enabled[1].get():
             e = wf.noise[1].get()
             if e == 0: # tone B
-                c = '0b00000010'
+                c = '0b00111101'
             elif e == 1:
-                c = '0b00010000'
+                c = '0b00101111'
             elif e == 2:
-                c = '0b00010010'
-        o = o | int(c,2)
+                c = '0b00101101'
+        else:
+            c = '0b00111111'
+        o2 = format(int(b,2) ^ int(c,2), '08b')
         if wf.enabled[2].get():
             e = wf.noise[2].get()
             if e == 0:
-                c = '0b00000100'
+                c = '0b00111011'
             elif e == 1:
-                c = '0b00100000'
+                c = '0b00011111'
             elif e == 2:
-                c = '0b00100100'
-        o = o | int(c,2)
-        #print(format(o,'08b'))
+                c = '0b00011011'
+        else: 
+            c = '0b00111111'
+        o3 = format(int(b,2) ^ int(c,2), '08b')
+        i = 0
+        of = '0b10'
+        while i < 6:
+            if o[i+2] == '0' or o2[i+2] == '0' or o3[i+2] == '0':
+                of += '0'
+            else:
+                of += '1'
+            i += 1
         self.textbox.insert(tk.END, ' ; Tone/Noise IO\n')
-        self.add_asm_text(self.dos.get(), 7, o, self.defs.get())
+        self.add_asm_text(self.dos.get(), 7, int(of,2), self.defs.get())
         self.textbox.insert(tk.END, '\n')
         # VOL / ENVELOPE - optional if envelope = False (r8, r9, ra)
         if (wf.envyesno == True and self.vol.get()) or wf.envyesno == False:
@@ -830,7 +846,7 @@ class msfx_window(tk.Tk):
             return
 
         pd = float(self.env_freq_var.get())
-        v = math.floor((3580000/2)/pd/256)
+        v = math.floor(((3580000/2)*pd)/256)
         if v < 1:
             v = 1
         if v > 65535:
@@ -843,7 +859,7 @@ class msfx_window(tk.Tk):
         if int(o) == 0:
             self.env_freq.set(1)
             o = '1'
-        pd = round((3580000/2)/(256*int(o)),2)
+        pd = round(1/((3580000/2)/(256*int(o))),2)
         #print(pd)
         self.env_freq_txt.delete(0,tk.END)
         self.env_freq_txt.insert(0,pd)
@@ -1010,7 +1026,7 @@ class msfx_window(tk.Tk):
                     wf = 'mixed' 
                     stereonoise = True
                     noisechan = i
-                sr = (3580000/2)/(self.env_freq.get()*256)
+                sr = 1/((3580000/2)/(self.env_freq.get()*256))
                 sr = min(math.floor(44000/sr), 44000)
                 w[i] = msxwaveform(samplerate=sr, hex_freq = fre, envelope=self.envyesno, envelopetype=self.envelope, env_period=self.env_freq.get(), wf=wf, noise_fr=nf, vol=self.vol_lvl[i].get())#, envelopetype=envelope_types['inv_sawtooth'])
                 s += 1

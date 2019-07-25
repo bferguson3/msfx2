@@ -1,0 +1,154 @@
+ fname "sccplus.bin"
+
+header:
+ db $fe
+ dw init
+ dw EOF
+ dw init
+
+ org $c000
+
+
+init:
+DetectSCC:
+
+ENASLT:		EQU	$0024
+EXPTBL:		EQU	$FCC1
+SCCSLOT: equ $ce34
+
+SCANSLT:
+	XOR	A		; start from slot 0
+	LD	HL,EXPTBL
+.loop:
+	LD	C,(HL)
+	OR	C
+.loop2:
+	EXX
+
+	LD	(CHK_SCC.c_slt),A	; save current slot
+
+	PUSH	AF
+
+	LD	H,$80
+	CALL	ENASLT
+
+	CALL	CHK_SCC
+
+	POP	AF
+
+	EXX
+
+	ADD	A,%00000100	; increase subslot number
+	LD	C,A		; C = new slot + subslot
+	BIT	7,A		; check if slot expanded
+	JR	Z,.next		; if not expanded go for next slot
+	AND	%00001100	; check if already checked all subslots
+	LD	A,C
+	JR	NZ,.loop2	; still some subslots left
+.next:
+	INC	HL
+	LD	A,C
+	INC	A
+	AND	%00000011
+	RET	Z		; return if all slots & subslots are checked!
+;
+	JR	.loop
+
+CHK_SCC:
+	LD	HL,$A000
+	LD	DE,$BFFE
+	LD	BC,$2000	; C = 00h -> SCC = YES if found
+	XOR	A
+	LD	(DE),A		; SET ROM + SCC if SCC-I cartridge
+	LD	A,(HL)
+	INC	A
+	LD	(HL),A
+	CP	(HL)
+	RET	Z		; found RAM -> return
+
+	LD	HL,$97FF
+	LD	(HL),L		; activate SCC write (write xx111111)
+	INC	HL		; HL = 9800h
+	LD	A,(HL)
+	INC	A
+	LD	(HL),A
+	CP	(HL)
+	RET	NZ
+	DEC	A
+	LD	(HL),A
+
+.f_SCC:
+	XOR	A
+	DEC	HL
+	LD	(HL),A		; disable write to SCC RAM
+
+	LD	A,B
+	LD	(DE),A		; SET ROM + SCC+ if SCC-I present
+	LD	HL,$B7FF
+	LD	(HL),L		; activate SCC+ write (write 1xxxxxxx)
+	INC	HL		; HL = B800h
+	LD	A,(HL)
+	INC	A
+	LD	(HL),A
+	CP	(HL)
+	JR	NZ,.setSCC
+	DEC	A
+	LD	(HL),A
+
+.f_SCCI:
+	INC	C		; C = 1 -> SCC+ = YES
+
+.setSCC:
+	XOR	A
+	DEC	HL
+	LD	(HL),A		; disable write to SCC+ RAM
+
+	LD	A,$00	; register "A" will contain slot/subslot with SCC Cartridge
+.c_slt:	EQU	$ - 1	; register "C" will contain "0" for SCC and "1" for SCC+
+
+    ld (SCCSLOT), a 
+
+    ld hl, waveform
+    ld de, $b800
+    ld bc, 32
+    ldir 
+
+    pop af 
+    pop af 
+
+    ld a, ($f343)
+    ld h, $80
+    call ENASLT
+
+    ld hl, $bffe
+    ld e, $20
+    ld a, ($ce34)
+    call $14            ; write mode 0 to bank select
+
+    ld hl, $b000
+    ld e, $80
+    ld a, ($ce34)
+    call $14
+
+	ld e, 15 
+	ld a, ($ce34)
+	ld hl, $b8aa 
+	call $14
+
+	ld e, $ff 
+	ld a, ($ce34)
+	ld hl, $b8af 
+	call $14
+
+	ld hl, $b8a1
+	ld e, 8
+	ld a, ($ce34)
+	call $14
+
+loop: jp loop 
+waveform:
+ db $6d,$67,$5f,$50,$48,$3a,$38,$28
+ db $23,$80,$14,$0b,$80,$80,$f9,$ef
+ db $e6,$dc,$80,$c7,$bd,$b4,$ae,$a3
+ db $99,$93,$8e,$8c,$8e,$8f,$99,$9a
+EOF:

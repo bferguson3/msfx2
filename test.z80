@@ -11,60 +11,122 @@ fname "hw.com"
 BDOS: equ 05H
 _STROUT: equ 09H
 _CONOUT: equ 02H
-WRTPSG:     equ $0093
+;WRTPSG:     equ $0093
 RDPSG:      equ $0096
 EXEBAS:     equ $4646
 BDRCLR:     equ $F3EB
-EXPTBL: equ 0FCC1h
-CALSLT: equ 01Ch
+;EXPTBL: equ 0FCC1h
+;CALSLT: equ 01Ch
 TEMPVAR: equ $c000
 COUNTER: equ $c001
 REGLOOP: equ $c002
-GICINI: equ $0090
+;GICINI: equ $0090
 
 ; Compilation address, standard MSX-DOS entry point
 	org 100H
 
 ; Program code entry point
 Execute:
-    ;; Initialize PSG
-    ld ix,GICINI
-    ld iy,[EXPTBL-1]
-    call CALSLT 
+     ; Made with MSFX2!
+ ;  (Remember to reset channels after the desired
+ ;   number of frames have passed.)
+ ; Made with MSFX2!
+ ;  (Remember to reset channels after the desired
+ ;   number of frames have passed.)
+ ; Made with MSFX2!
+ ;  (Remember to reset channels after the desired
+ ;   number of frames have passed.)
+ ; Made with MSFX2!
+ ;  (Remember to reset channels after the desired
+ ;   number of frames have passed.)
+ ; Made with MSFX2!
+ ;  (Remember to reset channels after the desired
+ ;   number of frames have passed.)
+ ; Made with MSFX2!
+ ;  (Remember to reset channels after the desired
+ ;   number of frames have passed.)
 
-    ;; set up mixed sound:
-    ld e, %10110111
-    ld a, 7
-    ld ix,WRTPSG
-    ld iy,[EXPTBL-1]
-    call CALSLT 
+GICINI: equ $0090
+EXPTBL: equ $fcc1
+CALSLT: equ $1c
+WRTPSG: equ $0093
 
-    ;; enable max vol:
-    ld e, %00001111
-    ld a, 8
-    ld ix,WRTPSG
-    ld iy,[EXPTBL-1]
-    call CALSLT 
+ ; Init PSG
+   ld ix, GICINI
+   ld iy, [EXPTBL-1]
+   call CALSLT
 
-    ;; low tone freq:
-    ld e, %00000010
-    ld a, 1
-    ld ix,WRTPSG
-    ld iy,[EXPTBL-1]
-    call CALSLT 
+ ; Tone/Noise IO
+   ld a, 7
+   ld e, %10110111
+   
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
 
-    ;ld e, %00001010
-    ;ld a, 3
-    ;ld ix,WRTPSG
-    ;ld iy,[EXPTBL-1]
-    ;call CALSLT 
+ ; Volume setting
+   ld a, 8
+   ld e, 31
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+   ld a, 9
+   ld e, 31
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
 
-    ;; middle buzz freq 
-    ld e, %00000000
-    ld a, 6
-    ld ix,WRTPSG
-    ld iy,[EXPTBL-1]
-    call CALSLT 
+ ; Channel 1 tone
+   ld a, 0
+   ld e, 124
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+   ld a, 1
+   ld e, 12
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+
+ ; Channel 2 tone
+   ld a, 2
+   ld e, 175
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+   ld a, 3
+   ld e, 4
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+
+ ; Noise frequency
+   ld a, 6
+   ld e, 1
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+
+ ; Envelope frequency
+   ld a, 11
+   ld e, 80
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+   ld a, 12
+   ld e, 27
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+
+ ; Envelope shape
+   ld a, 13
+   ld e, %00001001
+   ld ix, WRTPSG
+   ld iy, [EXPTBL-1]
+   call CALSLT
+
+
 
     ;; print all PSG registers 0-d
     xor a 
