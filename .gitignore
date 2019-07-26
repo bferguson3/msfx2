@@ -1,6 +1,5 @@
 *.wav
 /.vscode
-*.bas
 *.sh
 *.bin
 *.exe
@@ -8,5 +7,7 @@
 *.sym
 *.tmp
 /dostest
+/build 
+/dist 
 *.dsk 
 /__pycache__

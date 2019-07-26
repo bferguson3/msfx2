@@ -1,0 +1,1 @@
+1bload"sfxtest.bin",r

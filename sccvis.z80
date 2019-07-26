@@ -10,6 +10,16 @@ header:
 
 
 init:
+call DetectSCC 
+
+    ;ld a, 0
+    ;call $5f 
+	;ld a, 80
+	;ld ($521c), a 
+	;call $51c9
+
+loop: jp loop 
+
 DetectSCC:
 
 ENASLT:		EQU	$0024
@@ -123,7 +133,7 @@ CHK_SCC:
 	ld a, $ff 
 	ld ($b8af), a 
 
-	ld a, 3 
+	ld a, 4 
 	ld ($b8a1), a 
 	
 	ld hl, waveform
@@ -131,11 +141,12 @@ CHK_SCC:
     ld bc, 32
     ldir 
 
-loop: jp loop 
+	ret 
+
 
 waveform:
- db $58,$51,$41,$32,$1e,$0f,$01,$f6
- db $e7,$e0,$d9,$d2,$cc,$c2,$b9,$ad
- db $a6,$9a,$94,$8a,$83,$80,$80,$80
- db $80,$80,$80,$85,$8a,$92,$9d,$a2
+ db $80,$88,$90,$98,$a0,$a8,$b0,$b8
+ db $c0,$c8,$d0,$d8,$e0,$e8,$f0,$f8
+ db $00,$08,$10,$18,$20,$28,$30,$38
+ db $40,$48,$50,$58,$60,$68,$70,$78
 EOF:
