@@ -146,6 +146,11 @@ class sccvis_win(tk.Tk):
 
         out.append("""
 init:
+
+    call DetectSCC 
+
+loop: jp loop 
+
 DetectSCC:
 
 ENASLT:		EQU	$0024
@@ -267,11 +272,7 @@ CHK_SCC:
     ld bc, 32
     ldir 
 
-    ld a, 1
-    call $5f 
-
-
-loop: jp loop 
+    ret
 
 """)
         out.append('waveform:\n')
