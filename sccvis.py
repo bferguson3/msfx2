@@ -37,16 +37,33 @@ class sccvis_win(tk.Tk):
         self.visframe.bind("<Button-1>", self.draw_wave_shape)
         self.visframe.bind("<B1-Motion>", self.draw_wave_shape)
 
-        self.visframe.grid(row=0, column=0, rowspan=8)
-
+        self.visframe.grid(row=0, column=0, columnspan=8, rowspan=8)
+        
+        tk.Label(self, text='Frequency (0-15):').grid(row=9,column=0,sticky='e')
+        self.freq_input = tk.Entry(self, width=4)
+        self.freq_input.grid(row=9, column=1, sticky='w')
         self.button_make = tk.Button(self, text='Make .z80', command=self.writefile)
-        self.button_make.grid(row=9,column=0,sticky='ew')
+        self.button_make.grid(row=9,column=2,sticky='ew')
         #tk.Label(self, text='Frequency:').grid(row=0, column=1, sticky='s')
         #self.channel_no = tk.Entry(self, width=4)
         #self.channel_no.grid(row=1, column=1, sticky='n')
 
     #
     def writefile(self):
+        try:
+            fv = int(self.freq_input.get())
+        except:
+            self.freq_input.delete(0, tk.END)
+            self.freq_input.insert(tk.END, '0')
+            fv = 0 
+        if fv < 0:
+            self.freq_input.delete(0, tk.END)
+            self.freq_input.insert(tk.END, '0')
+            fv = 0
+        if fv > 15:
+            self.freq_input.delete(0, tk.END)
+            self.freq_input.insert(tk.END, '15')
+            fv = 15
         out = []
         out.append(' fname \"sccplus.bin\"\n\n')
         out.append('header:\n db $fe\n dw init\n dw EOF\n dw init\n\n')
@@ -152,44 +169,35 @@ CHK_SCC:
 
     ld (SCCSLOT), a 
 
-    ld hl, waveform
+    pop af 
+    pop af 
+
+	ld a, $20
+	ld ($bffe), a 
+
+	ld a, $80
+	ld ($b000), a 
+
+	ld a, 15
+	ld ($b8aa), a 
+
+	ld a, $ff 
+	ld ($b8af), a 
+
+	ld a, """+ str(fv) + """ 
+	ld ($b8a1), a 
+	
+	ld hl, waveform
     ld de, $b800
     ld bc, 32
     ldir 
 
-    pop af 
-    pop af 
+    ld a, 1
+    call $5f 
 
-    ld a, ($f343)
-    ld h, $80
-    call ENASLT
-
-    ld hl, $bffe
-    ld e, $20
-    ld a, ($ce34)
-    call $14            ; write mode 0 to bank select
-
-    ld hl, $b000
-    ld e, $80
-    ld a, ($ce34)
-    call $14
-
-	ld e, 15 
-	ld a, ($ce34)
-	ld hl, $b8aa 
-	call $14
-
-	ld e, $ff 
-	ld a, ($ce34)
-	ld hl, $b8af 
-	call $14
-
-	ld hl, $b8a1
-	ld e, 8
-	ld a, ($ce34)
-	call $14
 
 loop: jp loop 
+
 """)
         out.append('waveform:\n')
         i = 0

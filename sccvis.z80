@@ -108,47 +108,34 @@ CHK_SCC:
 
     ld (SCCSLOT), a 
 
-    ld hl, waveform
+    pop af 
+    pop af 
+
+	ld a, $20
+	ld ($bffe), a 
+
+	ld a, $80
+	ld ($b000), a 
+
+	ld a, 15
+	ld ($b8aa), a 
+
+	ld a, $ff 
+	ld ($b8af), a 
+
+	ld a, 3 
+	ld ($b8a1), a 
+	
+	ld hl, waveform
     ld de, $b800
     ld bc, 32
     ldir 
 
-    pop af 
-    pop af 
-
-    ld a, ($f343)
-    ld h, $80
-    call ENASLT
-
-    ld hl, $bffe
-    ld e, $20
-    ld a, ($ce34)
-    call $14            ; write mode 0 to bank select
-
-    ld hl, $b000
-    ld e, $80
-    ld a, ($ce34)
-    call $14
-
-	ld e, 15 
-	ld a, ($ce34)
-	ld hl, $b8aa 
-	call $14
-
-	ld e, $ff 
-	ld a, ($ce34)
-	ld hl, $b8af 
-	call $14
-
-	ld hl, $b8a1
-	ld e, 8
-	ld a, ($ce34)
-	call $14
-
 loop: jp loop 
+
 waveform:
- db $6d,$67,$5f,$50,$48,$3a,$38,$28
- db $23,$80,$14,$0b,$80,$80,$f9,$ef
- db $e6,$dc,$80,$c7,$bd,$b4,$ae,$a3
- db $99,$93,$8e,$8c,$8e,$8f,$99,$9a
+ db $58,$51,$41,$32,$1e,$0f,$01,$f6
+ db $e7,$e0,$d9,$d2,$cc,$c2,$b9,$ad
+ db $a6,$9a,$94,$8a,$83,$80,$80,$80
+ db $80,$80,$80,$85,$8a,$92,$9d,$a2
 EOF:
