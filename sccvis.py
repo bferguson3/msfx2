@@ -1,9 +1,65 @@
 import tkinter as tk 
 import math 
 
+class waveforms(object):
+    def __init__(self):
+
+        self.wf_1 = [ 0x00, 0xf0, 0xe0, 0xd0, 
+                0xc0, 0xb0, 0xa0, 0x90,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x7f, 0x70, 0x60, 0x50,
+                0x40, 0x30, 0x20, 0x10 ]
+
+        self.wf_2 = [ 0x00, 0xf8, 0xf0, 0xe8,
+                0xe0, 0xd8, 0xd0, 0xc8,
+                0xc0, 0xb8, 0xb0, 0xa8,
+                0xa0, 0x98, 0x90, 0x88,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80 ]
+        # saw, square, sin
+        self.wf_3 = [ 0x80, 0x88, 0x90, 0x98,
+                0xa0, 0xa8, 0xb0, 0xb8,
+                0xc0, 0xc8, 0xd0, 0xd8,
+                0xe0, 0xe8, 0xf0, 0xf8,
+                0x00, 0x08, 0x10, 0x18,
+                0x20, 0x28, 0x30, 0x38,
+                0x40, 0x48, 0x50, 0x58,
+                0x60, 0x68, 0x70, 0x78 ]
+
+        self.wf_4 = [ 0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x80, 0x80, 0x80, 0x80,
+                0x7f, 0x7f, 0x7f, 0x7f,
+                0x7f, 0x7f, 0x7f, 0x7f,
+                0x7f, 0x7f, 0x7f, 0x7f,
+                0x7f, 0x7f, 0x7f, 0x7f ]
+
+        self.wf_5 = [ 0x00, 0x19, 0x31, 0x47, 
+                0x5a, 0x6a, 0x7d, 0x7f,
+                0x7f, 0x7d, 0x6a, 0x5a,
+                0x47, 0x31, 0x19, 0x00,
+                0xff, 0xe7, 0xcf, 0xb9,
+                0xa6, 0x96, 0x83, 0x80,
+                0x80, 0x83, 0x96, 0xa6,
+                0xb9, 0xcf, 0xe7, 0xff ]
+
+class xy_pos(object):
+    def __init__(self, x, y):
+        self.x = x 
+        self.y = y
+
+
 class sccvis_win(tk.Tk):
     def __init__(self):
         super().__init__()
+        
+        self.waveforms = waveforms()
         
         visw = 640
         vish = 480
@@ -44,11 +100,30 @@ class sccvis_win(tk.Tk):
         self.freq_input.grid(row=9, column=1, sticky='w')
         self.button_make = tk.Button(self, text='Make .z80', command=self.writefile)
         self.button_make.grid(row=9,column=2,sticky='ew')
-        #tk.Label(self, text='Frequency:').grid(row=0, column=1, sticky='s')
-        #self.channel_no = tk.Entry(self, width=4)
-        #self.channel_no.grid(row=1, column=1, sticky='n')
-
+        
+        self.wf_b1 = tk.Button(self, text='Real wave 1', command=lambda:self.setwave(self.waveforms.wf_1))
+        self.wf_b1.grid(row=0, column=8)
+        self.wf_b1 = tk.Button(self, text='Real wave 2', command=lambda:self.setwave(self.waveforms.wf_2))
+        self.wf_b1.grid(row=1, column=8)
+        self.wf_b1 = tk.Button(self, text='Sawtooth', command=lambda:self.setwave(self.waveforms.wf_3))
+        self.wf_b1.grid(row=2, column=8)
+        self.wf_b1 = tk.Button(self, text='Square', command=lambda:self.setwave(self.waveforms.wf_4))
+        self.wf_b1.grid(row=3, column=8)
+        self.wf_b1 = tk.Button(self, text='Sine', command=lambda:self.setwave(self.waveforms.wf_5))
+        self.wf_b1.grid(row=4, column=8)
     #
+    def setwave(self, wave):
+        i = 0
+        #print(wave)
+        while i < 32:
+            if wave[i] < 128:
+                w = 256 - (wave[i] + 128)
+            if wave[i] >= 128:
+                w = 128 + (255-wave[i])
+            self.update_wave(i, w)
+            i += 1
+
+
     def writefile(self):
         try:
             fv = int(self.freq_input.get())
@@ -230,6 +305,9 @@ loop: jp loop
         xp = math.floor(o.x/self.pxw)
         yp = math.floor(o.y/self.pxh)
         
+        self.update_wave(xp, yp)
+    
+    def update_wave(self, xp, yp):
         i = 0
         while i < 255:
             self.visframe.itemconfig(self.wfpx[(i*32)+xp], fill='#FFF')
@@ -250,7 +328,7 @@ loop: jp loop
         else:
             self.wf_data[xp] = 127+(256-yp) 
     #       
-##
+###
 
 app = sccvis_win()
-app.mainloop()
+app.mainloop() 
